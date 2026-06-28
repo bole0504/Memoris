@@ -47,13 +47,20 @@ ssh "$VPS_HOST" "mkdir -p '$REMOTE_DIR'"
 # --delete keeps the box in sync; never wipe the live SQLite db or node_modules.
 rsync -az --delete --exclude node_modules --exclude '*.db' "$STAGE/" "$VPS_HOST:$REMOTE_DIR/"
 
-echo "==> 4/5  Install prod deps + Prisma on the box (linux binaries)"
+echo "==> 4/5  Ensure swap (512MB box OOMs without it) + install prod deps + Prisma"
 ssh "$VPS_HOST" bash -se <<REMOTE
 set -euo pipefail
+# A 512MB box gets the npm/Prisma install OOM-killed without swap (docs/ARCHITECTURE.md §11).
+if ! swapon --show | grep -q .; then
+  echo "  creating 2G swap"
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
 cd "$REMOTE_DIR"
 npm install --omit=dev --no-audit --no-fund
-npx prisma generate
-npx prisma db push
+# Use the locally-installed Prisma CLI (NOT npx, which would fetch a different major version).
+./node_modules/.bin/prisma generate
+./node_modules/.bin/prisma db push
 REMOTE
 
 echo "==> 5/5  (Re)start under pm2 on port $PORT (alongside capnhatgia)"
