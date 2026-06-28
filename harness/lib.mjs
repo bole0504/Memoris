@@ -32,14 +32,18 @@ export async function runStep(name, fn) {
   }
 }
 
-/** Wrap a live-AI check so an upstream 429 (free-tier rate limit) becomes a SKIP, not a failure. */
+/**
+ * Wrap a live-AI check so a TRANSIENT upstream error (429 rate limit, 503 overload) becomes a SKIP
+ * rather than a code-failure. Real errors (400/500/empty) still fail.
+ */
 export function skipOn429(fn) {
   return async (ctx) => {
     try {
       return await fn(ctx);
     } catch (e) {
-      if (/\b429\b|rate limit|quota/i.test(String(e))) {
-        throw new Error('SKIP: Gemini free-tier rate limit (429) — code unchanged, retry later');
+      const s = String(e);
+      if (/\b(429|503)\b|rate limit|quota|overload|unavailable|currently experiencing/i.test(s)) {
+        throw new Error('SKIP: Gemini transient upstream (429/503) — code unchanged, retry later');
       }
       throw e;
     }

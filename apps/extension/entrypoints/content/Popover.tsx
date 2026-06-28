@@ -4,6 +4,7 @@ import type { Source } from '@memoris/shared';
 import { MSG, type CaptureResult, type Reply } from '../../lib/messages.js';
 
 export interface PopoverProps {
+  captureId: string;
   selection: string;
   context?: string;
   source: Source;
@@ -17,7 +18,7 @@ type View =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; result: CaptureResult };
 
-export function Popover({ selection, context, source, rect, onClose }: PopoverProps) {
+export function Popover({ captureId, selection, context, source, rect, onClose }: PopoverProps) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [saved, setSaved] = useState<Set<string>>(new Set());
 
@@ -26,6 +27,7 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
     (async () => {
       const reply = (await browser.runtime.sendMessage({
         type: MSG.capture,
+        captureId,
         selection,
         context,
         source,
@@ -33,12 +35,14 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
       if (cancelled) return;
       if (reply.ok) setView({ kind: 'ready', result: reply.data });
       else if (reply.needAuth) setView({ kind: 'need-auth' });
-      else setView({ kind: 'error', message: reply.error });
+      else if (reply.error !== 'cancelled') setView({ kind: 'error', message: reply.error });
     })();
+    // On unmount (close / click-outside), abort the in-flight upstream request.
     return () => {
       cancelled = true;
+      void browser.runtime.sendMessage({ type: MSG.cancel, captureId });
     };
-  }, [selection, context, source]);
+  }, [captureId, selection, context, source]);
 
   async function onRemember(unitText: string, encounterId: string) {
     const reply = (await browser.runtime.sendMessage({
@@ -112,6 +116,13 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
                 </div>
               ))}
             </div>
+
+            {view.result.timings && (
+              <p className="text-[10px] text-slate-400">
+                ⚡ {view.result.timings.aiMs}ms AI · {view.result.timings.totalMs}ms total
+                {view.result.timings.attempts > 1 ? ` · ${view.result.timings.attempts} tries` : ''}
+              </p>
+            )}
           </div>
         )}
       </div>

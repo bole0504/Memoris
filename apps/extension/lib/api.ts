@@ -18,9 +18,9 @@ async function base(): Promise<string> {
 
 async function request<T>(
   path: string,
-  opts: { method?: string; body?: unknown; auth?: boolean; retry?: boolean } = {},
+  opts: { method?: string; body?: unknown; auth?: boolean; retry?: boolean; signal?: AbortSignal } = {},
 ): Promise<T> {
-  const { method = 'GET', body, auth = true, retry = true } = opts;
+  const { method = 'GET', body, auth = true, retry = true, signal } = opts;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (auth) {
     const tokens = await getAuth();
@@ -31,6 +31,7 @@ async function request<T>(
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
 
   // Try a one-shot refresh on 401.
@@ -71,15 +72,21 @@ export async function login(email: string, name?: string): Promise<void> {
   await setAuth({ accessToken: r.accessToken, refreshToken: r.refreshToken, email: r.user.email });
 }
 
-export async function analyze(text: string, targetLanguage: string, context?: string): Promise<AnalyzeResponse> {
+export async function analyze(
+  text: string,
+  targetLanguage: string,
+  context?: string,
+  signal?: AbortSignal,
+): Promise<AnalyzeResponse> {
   return request<AnalyzeResponse>('/v1/analyze', {
     method: 'POST',
     body: { text, targetLanguage, context },
+    signal,
   });
 }
 
-export async function embed(text: string): Promise<number[]> {
-  const r = await request<{ embedding: number[] }>('/v1/embed', { method: 'POST', body: { text } });
+export async function embed(text: string, signal?: AbortSignal): Promise<number[]> {
+  const r = await request<{ embedding: number[] }>('/v1/embed', { method: 'POST', body: { text }, signal });
   return r.embedding;
 }
 

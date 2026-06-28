@@ -23,8 +23,9 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
       }
       if (!(await consumeAiQuota(req.user!.id, reply))) return;
 
+      const t0 = Date.now();
       try {
-        const raw = await generateJSON<RawAnalyze>(
+        const { data: raw, meta } = await generateJSON<RawAnalyze>(
           analyzePrompt(text, targetLanguage, context),
           ANALYZE_SCHEMA,
         );
@@ -36,12 +37,17 @@ export async function analyzeRoutes(app: FastifyInstance): Promise<void> {
             type: coerceConceptType(u.type),
             gloss: u.gloss,
           })),
+          timings: { aiMs: meta.aiMs, totalMs: Date.now() - t0, attempts: meta.attempts },
         };
       } catch (err) {
         const status = err instanceof GeminiError ? err.status : 502;
         req.log.error({ err }, 'analyze failed');
         return reply.code(status >= 400 && status < 600 ? status : 502).send({
-          error: { code: 'ai_error', message: 'analysis failed' },
+          error: {
+            code: status === 429 ? 'rate_limited' : 'ai_error',
+            message: err instanceof GeminiError ? err.message : 'analysis failed',
+            upstream: status,
+          },
         });
       }
     },

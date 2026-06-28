@@ -7,8 +7,13 @@ import type { AnalyzeResponse, ProposedUnit } from '@memoris/shared';
  * Then `rememberUnit` saves a chosen unit with its source context.
  */
 export interface CaptureDeps {
-  analyze: (text: string, targetLanguage: string, context?: string) => Promise<AnalyzeResponse>;
-  embed: (text: string) => Promise<number[]>;
+  analyze: (
+    text: string,
+    targetLanguage: string,
+    context?: string,
+    signal?: AbortSignal,
+  ) => Promise<AnalyzeResponse>;
+  embed: (text: string, signal?: AbortSignal) => Promise<number[]>;
   brain: MemoryStore;
   targetLanguage: string;
 }
@@ -25,12 +30,16 @@ export interface CaptureState {
   concept?: StoredConcept;
 }
 
-export async function runCapture(input: CaptureInput, deps: CaptureDeps): Promise<CaptureState> {
+export async function runCapture(
+  input: CaptureInput,
+  deps: CaptureDeps,
+  signal?: AbortSignal,
+): Promise<CaptureState> {
   // Translate (latency-critical) and embed in parallel. Embedding is best-effort: if it fails
   // (offline / quota), the loop still works — we just lose Tier-1 for this lookup.
   const [analysis, embedding] = await Promise.all([
-    deps.analyze(input.selection, deps.targetLanguage, input.surroundingContext),
-    deps.embed(input.selection).catch(() => undefined),
+    deps.analyze(input.selection, deps.targetLanguage, input.surroundingContext, signal),
+    deps.embed(input.selection, signal).catch(() => undefined),
   ]);
 
   const lookup = await deps.brain.lookup(input, embedding);

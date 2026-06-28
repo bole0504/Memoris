@@ -1,11 +1,9 @@
 import { env } from './env.js';
 
 /**
- * Minimal Gemini REST client (no SDK — keeps deps light and the surface obvious).
- * The API key lives only here on the gateway, never in the client (docs/ARCHITECTURE.md §3).
- *
- * Model routing (docs/ARCHITECTURE.md §3): translate/gloss uses the cheap fast model; the same
- * client can be pointed at a bigger model per task by passing `model`.
+ * Minimal Gemini REST client (no SDK). The API key lives only here on the gateway
+ * (docs/ARCHITECTURE.md §3). Every call is timed + logged so latency and rate-limit retries are
+ * visible in `pm2 logs memoris-server`.
  */
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -20,47 +18,62 @@ export class GeminiError extends Error {
   }
 }
 
+/** Latency/▶retry metadata for one logical call. */
+export interface CallMeta {
+  aiMs: number;
+  attempts: number;
+  status: number;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Pull the server-suggested wait (seconds) out of a 429 body, if present. */
 function parseRetryDelay(body: string): number | undefined {
   const m = body.match(/retry in ([\d.]+)s/i) ?? body.match(/"retryDelay":\s*"([\d.]+)s"/i);
   return m ? Number(m[1]) : undefined;
 }
 
-/**
- * POST to Gemini with retry on transient overload (429/503) — common on the free tier. Honors the
- * server's suggested retry delay (capped) so the gateway is resilient to per-minute rate limits.
- */
-async function postWithRetry(url: string, body: unknown, attempts = 4): Promise<Response> {
-  const CAP_S = 20;
-  for (let i = 0; i < attempts; i++) {
+interface PostOpts {
+  signal?: AbortSignal;
+  /** Max attempts (interactive paths stay low so they fail fast instead of hanging). */
+  attempts?: number;
+  /** Cap on a single backoff wait, seconds. */
+  capS?: number;
+}
+
+/** POST with bounded retry on transient 429/503. Returns the response + attempt count. */
+async function postWithRetry(
+  url: string,
+  body: unknown,
+  { signal, attempts = 2, capS = 6 }: PostOpts,
+): Promise<{ res: Response; attempts: number }> {
+  for (let i = 1; i <= attempts; i++) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
-    if (res.ok || (res.status !== 429 && res.status !== 503)) return res;
-    if (i === attempts - 1) return res; // give up; let the caller read the error body
+    if (res.ok || (res.status !== 429 && res.status !== 503) || i === attempts) {
+      return { res, attempts: i };
+    }
     const text = await res.clone().text().catch(() => '');
-    const suggested = parseRetryDelay(text);
-    const waitS = Math.min(suggested ?? 1.5 * (i + 1), CAP_S);
+    const waitS = Math.min(parseRetryDelay(text) ?? 1.5 * i, capS);
     await sleep(waitS * 1000);
   }
-  // Unreachable, but satisfies the type checker.
-  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  throw new GeminiError('unreachable', 500);
 }
 
-interface GenerateOptions {
+interface GenerateOptions extends PostOpts {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
-  /** A JSON schema → forces structured JSON output. */
   responseSchema?: unknown;
 }
 
-/** Low-level text generation. Returns the model's text part. */
-export async function generate(prompt: string, opts: GenerateOptions = {}): Promise<string> {
+export async function generate(
+  prompt: string,
+  opts: GenerateOptions = {},
+): Promise<{ text: string; meta: CallMeta }> {
   if (!env.geminiApiKey) throw new GeminiError('GEMINI_API_KEY is not set', 500);
   const model = opts.model ?? env.geminiModel;
   const generationConfig: Record<string, unknown> = {
@@ -72,46 +85,59 @@ export async function generate(prompt: string, opts: GenerateOptions = {}): Prom
     generationConfig.responseSchema = opts.responseSchema;
   }
 
-  const res = await postWithRetry(`${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`, {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig,
-  });
+  const t0 = Date.now();
+  const { res, attempts } = await postWithRetry(
+    `${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`,
+    { contents: [{ parts: [{ text: prompt }] }], generationConfig },
+    opts,
+  );
+  const aiMs = Date.now() - t0;
+  console.info(`[gemini] op=generate model=${model} ms=${aiMs} attempts=${attempts} status=${res.status}`);
 
   if (!res.ok) {
     const body = await res.text();
-    throw new GeminiError(`Gemini ${res.status}: ${body.slice(0, 300)}`, res.status);
+    throw new GeminiError(`Gemini ${res.status}: ${body.slice(0, 200)}`, res.status);
   }
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new GeminiError('Gemini returned no text', 502);
-  return text;
+  return { text, meta: { aiMs, attempts, status: res.status } };
 }
 
-/** Structured generation: parses the JSON the schema enforced. */
-export async function generateJSON<T>(prompt: string, schema: unknown, opts: GenerateOptions = {}): Promise<T> {
-  const text = await generate(prompt, { ...opts, responseSchema: schema });
+export async function generateJSON<T>(
+  prompt: string,
+  schema: unknown,
+  opts: GenerateOptions = {},
+): Promise<{ data: T; meta: CallMeta }> {
+  const { text, meta } = await generate(prompt, { ...opts, responseSchema: schema });
   try {
-    return JSON.parse(text) as T;
+    return { data: JSON.parse(text) as T, meta };
   } catch {
     throw new GeminiError(`Gemini returned non-JSON: ${text.slice(0, 200)}`, 502);
   }
 }
 
-/** Embedding for a single text. Used by Tier-1 semantic search (Phase 2). */
-export async function embed(text: string, model = env.geminiEmbedModel): Promise<number[]> {
+export async function embed(
+  text: string,
+  opts: PostOpts & { model?: string } = {},
+): Promise<{ embedding: number[]; meta: CallMeta }> {
   if (!env.geminiApiKey) throw new GeminiError('GEMINI_API_KEY is not set', 500);
-  const res = await postWithRetry(`${BASE}/models/${model}:embedContent?key=${env.geminiApiKey}`, {
-    model: `models/${model}`,
-    content: { parts: [{ text }] },
-  });
+  const model = opts.model ?? env.geminiEmbedModel;
+  const t0 = Date.now();
+  const { res, attempts } = await postWithRetry(
+    `${BASE}/models/${model}:embedContent?key=${env.geminiApiKey}`,
+    { model: `models/${model}`, content: { parts: [{ text }] } },
+    opts,
+  );
+  const aiMs = Date.now() - t0;
+  console.info(`[gemini] op=embed model=${model} ms=${aiMs} attempts=${attempts} status=${res.status}`);
+
   if (!res.ok) {
     const body = await res.text();
-    throw new GeminiError(`Gemini embed ${res.status}: ${body.slice(0, 300)}`, res.status);
+    throw new GeminiError(`Gemini embed ${res.status}: ${body.slice(0, 200)}`, res.status);
   }
   const data = (await res.json()) as { embedding?: { values?: number[] } };
   const values = data.embedding?.values;
   if (!values || values.length === 0) throw new GeminiError('Gemini returned no embedding', 502);
-  return values;
+  return { embedding: values, meta: { aiMs, attempts, status: res.status } };
 }

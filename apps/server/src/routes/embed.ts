@@ -12,14 +12,19 @@ export async function embedRoutes(app: FastifyInstance): Promise<void> {
       const text = req.body?.text;
       if (!text) return reply.code(400).send({ error: { code: 'bad_request', message: 'text required' } });
       if (!(await consumeAiQuota(req.user!.id, reply))) return;
+      const t0 = Date.now();
       try {
-        const embedding = await embed(text);
-        return { embedding };
+        const { embedding, meta } = await embed(text);
+        return { embedding, timings: { aiMs: meta.aiMs, totalMs: Date.now() - t0, attempts: meta.attempts } };
       } catch (err) {
         const status = err instanceof GeminiError ? err.status : 502;
         req.log.error({ err }, 'embed failed');
         return reply.code(status >= 400 && status < 600 ? status : 502).send({
-          error: { code: 'ai_error', message: 'embed failed' },
+          error: {
+            code: status === 429 ? 'rate_limited' : 'ai_error',
+            message: err instanceof GeminiError ? err.message : 'embed failed',
+            upstream: status,
+          },
         });
       }
     },

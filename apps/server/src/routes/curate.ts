@@ -21,13 +21,20 @@ export async function curateRoutes(app: FastifyInstance): Promise<void> {
       if (!text) return reply.code(400).send({ error: { code: 'bad_request', message: 'text required' } });
       if (!(await consumeAiQuota(req.user!.id, reply))) return;
       try {
-        const raw = await generateJSON<RawCurate>(curatePrompt(text, targetLanguage, context), CURATE_SCHEMA);
+        const { data: raw } = await generateJSON<RawCurate>(
+          curatePrompt(text, targetLanguage, context),
+          CURATE_SCHEMA,
+        );
         return { ...raw, suggestedType: coerceConceptType(raw.suggestedType) };
       } catch (err) {
         const status = err instanceof GeminiError ? err.status : 502;
         req.log.error({ err }, 'curate failed');
         return reply.code(status >= 400 && status < 600 ? status : 502).send({
-          error: { code: 'ai_error', message: 'curate failed' },
+          error: {
+            code: status === 429 ? 'rate_limited' : 'ai_error',
+            message: err instanceof GeminiError ? err.message : 'curate failed',
+            upstream: status,
+          },
         });
       }
     },

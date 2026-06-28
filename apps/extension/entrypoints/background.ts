@@ -25,10 +25,17 @@ async function deps(): Promise<CaptureDeps> {
   return { analyze, embed, brain: getBrain(), targetLanguage: settings.targetLanguage };
 }
 
+// In-flight captures, so a "click outside" can abort the upstream request.
+const inFlight = new Map<string, AbortController>();
+
 async function handle(msg: AnyRequest): Promise<Reply<unknown>> {
   switch (msg?.type) {
     case MSG.capture:
-      return capture(msg.selection, msg.context, msg.source);
+      return capture(msg.captureId, msg.selection, msg.context, msg.source);
+    case MSG.cancel:
+      inFlight.get(msg.captureId)?.abort();
+      inFlight.delete(msg.captureId);
+      return { ok: true, data: null };
     case MSG.remember:
       return remember(msg.encounterId, msg.unitText);
     case MSG.syncObsidian:
@@ -39,12 +46,19 @@ async function handle(msg: AnyRequest): Promise<Reply<unknown>> {
 }
 
 async function capture(
+  captureId: string,
   selection: string,
   context: string | undefined,
   source: import('@memoris/shared').Source,
 ): Promise<Reply<CaptureResult>> {
+  const controller = new AbortController();
+  inFlight.set(captureId, controller);
   try {
-    const state = await runCapture({ selection, surroundingContext: context, source }, await deps());
+    const state = await runCapture(
+      { selection, surroundingContext: context, source },
+      await deps(),
+      controller.signal,
+    );
     await stash(state);
     return {
       ok: true,
@@ -53,11 +67,15 @@ async function capture(
         tier: state.tier,
         analysis: state.analysis,
         verdict: state.verdict,
+        timings: state.analysis.timings,
       },
     };
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return { ok: false, error: 'cancelled' };
     if (e instanceof ApiError && e.status === 401) return { ok: false, error: 'sign in', needAuth: true };
     return { ok: false, error: e instanceof Error ? e.message : 'capture failed' };
+  } finally {
+    inFlight.delete(captureId);
   }
 }
 

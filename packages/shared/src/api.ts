@@ -38,6 +38,16 @@ export interface ProposedUnit {
   gloss: string;
 }
 
+/** Where time went on a gateway call — for latency debugging. */
+export interface Timings {
+  /** Time spent in the upstream AI call(s), ms. */
+  aiMs: number;
+  /** Total server handling time, ms. */
+  totalMs: number;
+  /** How many upstream attempts (>1 means it was rate-limited/retried). */
+  attempts: number;
+}
+
 /** POST /v1/analyze — response (Phase 1). */
 export interface AnalyzeResponse {
   /** Tier-1 fast translation of the whole selection. */
@@ -46,6 +56,8 @@ export interface AnalyzeResponse {
   gloss: string;
   /** Units the AI suggests saving as concepts (user decides). */
   proposedUnits: ProposedUnit[];
+  /** Latency breakdown (optional; for debugging the popover). */
+  timings?: Timings;
 }
 
 /** Shape of an error body returned by the gateway. */
