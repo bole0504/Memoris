@@ -1,10 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { browser } from 'wxt/browser';
 import type { Source } from '@memoris/shared';
-import { analyze, embed, ApiError } from '../../lib/api.js';
-import { getBrain } from '../../lib/brain.js';
-import { getSettings, getAuth } from '../../lib/storage.js';
-import { runCapture, rememberUnit, type CaptureDeps, type CaptureState } from '../../lib/capture-controller.js';
-import { pushStats } from '../../lib/api.js';
+import { MSG, type CaptureResult, type Reply } from '../../lib/messages.js';
 
 export interface PopoverProps {
   selection: string;
@@ -18,63 +15,38 @@ type View =
   | { kind: 'loading' }
   | { kind: 'need-auth' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; state: CaptureState };
+  | { kind: 'ready'; result: CaptureResult };
 
 export function Popover({ selection, context, source, rect, onClose }: PopoverProps) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [saved, setSaved] = useState<Set<string>>(new Set());
-  const savedConceptIds = useRef<string[]>([]);
-  const depsRef = useRef<CaptureDeps | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const auth = await getAuth();
-      if (!auth) {
-        setView({ kind: 'need-auth' });
-        return;
-      }
-      const settings = await getSettings();
-      const deps: CaptureDeps = { analyze, embed, brain: getBrain(), targetLanguage: settings.targetLanguage };
-      depsRef.current = deps;
-      try {
-        const state = await runCapture({ selection, surroundingContext: context, source }, deps);
-        if (!cancelled) setView({ kind: 'ready', state });
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) setView({ kind: 'need-auth' });
-        else setView({ kind: 'error', message: err instanceof Error ? err.message : 'failed' });
-      }
+      const reply = (await browser.runtime.sendMessage({
+        type: MSG.capture,
+        selection,
+        context,
+        source,
+      })) as Reply<CaptureResult>;
+      if (cancelled) return;
+      if (reply.ok) setView({ kind: 'ready', result: reply.data });
+      else if (reply.needAuth) setView({ kind: 'need-auth' });
+      else setView({ kind: 'error', message: reply.error });
     })();
     return () => {
       cancelled = true;
     };
   }, [selection, context, source]);
 
-  async function onRemember(unitText: string) {
-    if (view.kind !== 'ready' || !depsRef.current) return;
-    const unit = view.state.analysis.proposedUnits.find((u) => u.text === unitText);
-    if (!unit) return;
-    const concept = await rememberUnit(view.state, unit, depsRef.current);
-    setSaved((s) => new Set(s).add(unitText));
-
-    // Units saved from the same passage co-occur in the user's real work → link them.
-    savedConceptIds.current.push(concept.id);
-    if (savedConceptIds.current.length >= 2) {
-      await depsRef.current.brain.linkCoOccurrence(savedConceptIds.current);
-    }
-    // Best-effort stats push so the dashboard reflects growth.
-    try {
-      const stats = await depsRef.current.brain.stats();
-      await pushStats({
-        concepts: stats.concepts,
-        encounters: stats.encounters,
-        streakDays: 0,
-        topConcepts: stats.topConcepts.map((c) => ({ text: c.text, encounterCount: c.encounterCount })),
-      });
-    } catch {
-      /* offline / not signed in — fine */
-    }
+  async function onRemember(unitText: string, encounterId: string) {
+    const reply = (await browser.runtime.sendMessage({
+      type: MSG.remember,
+      encounterId,
+      unitText,
+    })) as Reply<{ conceptId: string }>;
+    if (reply.ok) setSaved((s) => new Set(s).add(unitText));
   }
 
   const style: React.CSSProperties = {
@@ -109,17 +81,17 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
 
         {view.kind === 'ready' && (
           <div className="space-y-3">
-            <p className="text-base font-medium text-slate-900">{view.state.analysis.translation}</p>
-            <p className="text-slate-500">{view.state.analysis.gloss}</p>
+            <p className="text-base font-medium text-slate-900">{view.result.analysis.translation}</p>
+            <p className="text-slate-500">{view.result.analysis.gloss}</p>
 
-            {view.state.verdict.status !== 'new' && (
+            {view.result.verdict.status !== 'new' && (
               <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
-                {view.state.verdict.message}
+                {view.result.verdict.message}
               </p>
             )}
 
             <div className="space-y-1.5">
-              {view.state.analysis.proposedUnits.map((u) => (
+              {view.result.analysis.proposedUnits.map((u) => (
                 <div
                   key={u.text}
                   className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5"
@@ -132,7 +104,7 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
                   </div>
                   <button
                     disabled={saved.has(u.text)}
-                    onClick={() => onRemember(u.text)}
+                    onClick={() => void onRemember(u.text, view.result.encounterId)}
                     className="shrink-0 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:bg-emerald-500"
                   >
                     {saved.has(u.text) ? 'Saved ✓' : 'Remember'}

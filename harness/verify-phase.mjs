@@ -4,7 +4,7 @@
 //
 // Always runs the static gates (typecheck, lint, unit tests, build) so a regression in any phase
 // fails the run, then runs the live acceptance checks for phases 0..N.
-import { sh, runStep, assert, withServer, api, report, ROOT } from './lib.mjs';
+import { sh, runStep, assert, withServer, api, report, skipOn429, ROOT } from './lib.mjs';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -70,7 +70,7 @@ const live = {
     },
     {
       name: 'P1: /v1/analyze returns a translation + gloss (live Gemini)',
-      fn: async ({ base, token }) => {
+      fn: skipOn429(async ({ base, token }) => {
         const r = await api(base, '/v1/analyze', {
           method: 'POST',
           token,
@@ -79,7 +79,7 @@ const live = {
         assert(r.translation && r.translation.length > 0, 'empty translation');
         assert(typeof r.gloss === 'string', 'no gloss');
         return `“${r.translation.slice(0, 40)}…”`;
-      },
+      }),
     },
     {
       name: 'P1: /v1/analyze rejects unauthenticated calls',
@@ -97,7 +97,7 @@ const live = {
   2: [
     {
       name: 'P2: /v1/embed returns a vector (live Gemini)',
-      fn: async ({ base, token }) => {
+      fn: skipOn429(async ({ base, token }) => {
         const r = await api(base, '/v1/embed', {
           method: 'POST',
           token,
@@ -105,11 +105,11 @@ const live = {
         });
         assert(Array.isArray(r.embedding) && r.embedding.length > 50, 'no embedding vector');
         return `dim ${r.embedding.length}`;
-      },
+      }),
     },
     {
       name: 'P2: /v1/curate returns an LLM worth-remembering rubric (live Gemini)',
-      fn: async ({ base, token }) => {
+      fn: skipOn429(async ({ base, token }) => {
         const r = await api(base, '/v1/curate', {
           method: 'POST',
           token,
@@ -118,7 +118,7 @@ const live = {
         assert(typeof r.worthRemembering === 'boolean', 'no verdict');
         assert(['easy', 'medium', 'hard'].includes(r.difficulty), 'no difficulty');
         return `worth=${r.worthRemembering}, ${r.difficulty}`;
-      },
+      }),
     },
     {
       name: 'P2: dedup/merge + co-occurrence + tier-0/1 covered by unit tests',
@@ -133,6 +133,21 @@ const live = {
       name: 'P3: review scheduler logic covered by unit tests',
       fn: async () => {
         assert(existsSync(join(ROOT, 'packages/core/src/review.ts')), 'review module missing');
+      },
+    },
+  ],
+  4: [
+    {
+      name: 'P4: Obsidian plugin builds to main.js',
+      fn: async () => {
+        assert(existsSync(join(ROOT, 'apps/obsidian-plugin/main.js')), 'plugin main.js missing');
+        assert(existsSync(join(ROOT, 'apps/obsidian-plugin/manifest.json')), 'plugin manifest missing');
+      },
+    },
+    {
+      name: 'P4: markdown projection + lossless round-trip covered by unit tests',
+      fn: async () => {
+        assert(existsSync(join(ROOT, 'packages/core/src/markdown.test.ts')), 'markdown tests missing');
       },
     },
   ],

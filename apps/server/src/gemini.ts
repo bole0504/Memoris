@@ -22,12 +22,18 @@ export class GeminiError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Pull the server-suggested wait (seconds) out of a 429 body, if present. */
+function parseRetryDelay(body: string): number | undefined {
+  const m = body.match(/retry in ([\d.]+)s/i) ?? body.match(/"retryDelay":\s*"([\d.]+)s"/i);
+  return m ? Number(m[1]) : undefined;
+}
+
 /**
- * POST to Gemini with retry on transient overload (429/503) — common on the free tier. Keeps the
- * gateway resilient so callers (and the harness) don't see flaky failures.
+ * POST to Gemini with retry on transient overload (429/503) — common on the free tier. Honors the
+ * server's suggested retry delay (capped) so the gateway is resilient to per-minute rate limits.
  */
-async function postWithRetry(url: string, body: unknown, attempts = 3): Promise<Response> {
-  let last: Response | undefined;
+async function postWithRetry(url: string, body: unknown, attempts = 4): Promise<Response> {
+  const CAP_S = 20;
   for (let i = 0; i < attempts; i++) {
     const res = await fetch(url, {
       method: 'POST',
@@ -35,10 +41,14 @@ async function postWithRetry(url: string, body: unknown, attempts = 3): Promise<
       body: JSON.stringify(body),
     });
     if (res.ok || (res.status !== 429 && res.status !== 503)) return res;
-    last = res;
-    await sleep(400 * (i + 1) + Math.floor(((i + 1) * 137) % 200));
+    if (i === attempts - 1) return res; // give up; let the caller read the error body
+    const text = await res.clone().text().catch(() => '');
+    const suggested = parseRetryDelay(text);
+    const waitS = Math.min(suggested ?? 1.5 * (i + 1), CAP_S);
+    await sleep(waitS * 1000);
   }
-  return last!;
+  // Unreachable, but satisfies the type checker.
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
 
 interface GenerateOptions {

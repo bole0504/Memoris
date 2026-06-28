@@ -1,5 +1,10 @@
 # Memoris — Roadmap (A → Z)
 
+> **Build status (2026-06-28):** Phases 0–5 implemented and harness-verified (Phase 4 = Obsidian
+> graph projection, with the lossless round-trip done as the highest-risk piece). Each phase shipped
+> only on `node harness/ship-phase.mjs <n>` PASS. Remaining: Phase 6 (private beta) and 7+ (future).
+
+
 A phase-by-phase build plan from empty repo to a beta launch and beyond. Timeline assumes a
 small team / solo founder + AI; adjust as needed. Each phase has a **goal**, **deliverables**, and
 an **exit criterion** (what proves the phase is done).

@@ -62,8 +62,8 @@ memory growing. Each phase was shipped only after the self-verification harness 
 | 1 | Aha capture loop (Gemini translate + Remember) | ✅ verified (live Gemini) |
 | 2 | Memory & curation (tiers, dedup/merge, links, LLM rubric, privacy) | ✅ verified (live Gemini) |
 | 3 | Contextual review (source-replay micro-review, weak/confusion) | ✅ verified |
+| 4 | Obsidian graph projection (notes + wikilinks + bridge) | ✅ verified |
 | 5 | Dashboard, accounts, quota | ✅ verified |
-| 4 | Obsidian projection | deferred — needs a real vault + lossless round-trip |
 
 ## Repo layout
 
@@ -74,10 +74,32 @@ apps/
   dashboard/   Vite + React static SPA: stats, streaks, top words, usage/quota, plan
 packages/
   shared/      Shared TypeScript types (Encounter, Concept, Link, Source, API contracts)
-  core/        The brain — surface-agnostic: tiers, curation, dedup/merge, review scheduler
+  core/        The brain — surface-agnostic: tiers, curation, dedup/merge, review, md projection
+apps/obsidian-plugin/  Projects concepts → linked markdown notes; local bridge from the extension
 harness/       Self-verification: verify-phase.mjs (gates + live AC) · ship-phase.mjs (verify→push)
 deploy/        VPS prep, nginx config, prebuilt-artifact deploy script
 docs/          Product, architecture, decisions, roadmap
+```
+
+### See your vocabulary graph in Obsidian (Phase 4)
+
+The extension's background worker owns one brain (IndexedDB) and pushes each saved concept to a
+local bridge the Obsidian plugin runs. Each concept becomes one markdown note; typed links
+(`co-occurs`, `confused-with`, related) become `[[wikilinks]]`, so Obsidian's **Graph View** shows
+the connections you build at work each day. The AI only ever writes above a marker — your
+`## Your notes` section is never touched (lossless round-trip, the roadmap's #2 risk).
+
+```bash
+# 1. Build the plugin
+pnpm --filter @memoris/obsidian-plugin build
+
+# 2. Install it into your vault, then enable "Memoris" in Settings → Community plugins
+mkdir -p "<your-vault>/.obsidian/plugins/memoris"
+cp apps/obsidian-plugin/{main.js,manifest.json} "<your-vault>/.obsidian/plugins/memoris/"
+
+# 3a. Live: keep Obsidian open — new captures appear as notes automatically (bridge on :8765).
+# 3b. Backfill existing words: extension popup → "Export JSON", then in Obsidian run the command
+#     "Memoris: Import vocabulary from JSON" and paste it. Then open Graph View.
 ```
 
 ## Development

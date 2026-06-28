@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { login, getMe, type MeResponse } from '../../lib/api.js';
 import { getAuth, setAuth, getSettings, setSettings, type Settings } from '../../lib/storage.js';
 import { getBrain } from '../../lib/brain.js';
+import { syncToObsidian } from '../../lib/obsidian.js';
 import { Review } from './Review.js';
 
 const LANGS = [
@@ -74,6 +75,30 @@ export function App() {
   async function removePrivateDomain(d: string) {
     const current = settings?.privateDomains ?? [];
     setLocalSettings(await setSettings({ privateDomains: current.filter((x) => x !== d) }));
+  }
+
+  const [obsMsg, setObsMsg] = useState<string | null>(null);
+  async function exportBrain() {
+    const data = await getBrain().export();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'memoris-brain.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  async function syncObsidianNow() {
+    setObsMsg('Syncing…');
+    try {
+      const ok = await syncToObsidian(getBrain());
+      setObsMsg(ok ? 'Synced to Obsidian ✓' : 'Obsidian sync is off');
+    } catch {
+      setObsMsg('Obsidian bridge not reachable');
+    }
+  }
+  async function toggleObsidian(v: boolean) {
+    setLocalSettings(await setSettings({ obsidianSync: v }));
   }
 
   return (
@@ -174,6 +199,32 @@ export function App() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-600">Obsidian graph sync</label>
+              <input
+                type="checkbox"
+                checked={settings?.obsidianSync ?? true}
+                onChange={(e) => void toggleObsidian(e.target.checked)}
+              />
+            </div>
+            <div className="mt-2 flex gap-1">
+              <button
+                onClick={() => void syncObsidianNow()}
+                className="flex-1 rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-600"
+              >
+                Sync now
+              </button>
+              <button
+                onClick={() => void exportBrain()}
+                className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Export JSON
+              </button>
+            </div>
+            {obsMsg && <p className="mt-1 text-[11px] text-slate-500">{obsMsg}</p>}
           </div>
 
           <p className="text-xs text-slate-500">

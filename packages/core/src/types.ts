@@ -1,4 +1,4 @@
-import type { Concept, Encounter } from '@memoris/shared';
+import type { Concept, Encounter, IsoDateTime } from '@memoris/shared';
 
 export type { Concept, Encounter, Link, Source, ConceptType, LinkType } from '@memoris/shared';
 
@@ -44,6 +44,15 @@ export interface LookupResult {
   concept?: StoredConcept;
   /** Cosine similarity for a Tier-1 hit. */
   similarity?: number;
+}
+
+/** A portable snapshot of the whole brain — for export → Obsidian import / backup. */
+export interface BrainExport {
+  version: 1;
+  exportedAt: IsoDateTime;
+  concepts: StoredConcept[];
+  encounters: Encounter[];
+  links: import('@memoris/shared').Link[];
 }
 
 export type { StorageAdapter } from './adapter.js';

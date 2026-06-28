@@ -8,12 +8,18 @@ export interface Settings {
   targetLanguage: string;
   /** Per-domain "don't send to cloud" set (Phase 2 privacy). */
   privateDomains: string[];
+  /** Push captures to the local Obsidian plugin bridge (Phase 4). */
+  obsidianSync: boolean;
+  /** Obsidian bridge URL (must match the plugin's port). */
+  obsidianBridgeUrl: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: 'http://localhost:3000',
   targetLanguage: 'vi',
   privateDomains: [],
+  obsidianSync: true,
+  obsidianBridgeUrl: 'http://127.0.0.1:8765',
 };
 
 interface AuthTokens {

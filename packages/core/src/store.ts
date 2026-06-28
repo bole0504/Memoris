@@ -1,9 +1,10 @@
 import type { ConceptType, Encounter, Link, LinkType } from '@memoris/shared';
 import type { StorageAdapter } from './adapter.js';
-import type { CaptureInput, Clock, LookupResult, StoredConcept } from './types.js';
+import type { BrainExport, CaptureInput, Clock, LookupResult, StoredConcept } from './types.js';
 import { systemClock } from './types.js';
 import { normalizeKey } from './text.js';
 import { nearest, cosineSimilarity } from './vector.js';
+import { buildRelatedRefs, type RelatedRef } from './markdown.js';
 import { decideCuration, type CurationVerdict } from './curation.js';
 import { applyReExposure, applyReview, initialReviewState, isDue, type ReviewGrade } from './review.js';
 
@@ -190,6 +191,22 @@ export class MemoryStore {
 
   async listLinks(): Promise<Link[]> {
     return this.adapter.listLinks();
+  }
+
+  /** Wikilink targets for a concept (Obsidian projection, Phase 4). */
+  async relatedRefs(conceptId: string): Promise<RelatedRef[]> {
+    const [links, concepts] = await Promise.all([this.adapter.listLinks(), this.adapter.listConcepts()]);
+    return buildRelatedRefs(conceptId, links, new Map(concepts.map((c) => [c.id, c])));
+  }
+
+  /** A portable snapshot of the whole brain — for Obsidian import / backup (Phase 4). */
+  async export(): Promise<BrainExport> {
+    const [concepts, encounters, links] = await Promise.all([
+      this.adapter.listConcepts(),
+      this.adapter.listEncounters(),
+      this.adapter.listLinks(),
+    ]);
+    return { version: 1, exportedAt: this.clock.now().toISOString(), concepts, encounters, links };
   }
 
   // --- Dedup / merge / linking (Phase 2 — the moat) ---

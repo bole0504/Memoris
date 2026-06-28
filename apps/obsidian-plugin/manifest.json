@@ -1,0 +1,9 @@
+{
+  "id": "memoris",
+  "name": "Memoris",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Projects your Memoris vocabulary into linked notes so Obsidian's graph shows the connections you build at work each day.",
+  "author": "Memoris",
+  "isDesktopOnly": true
+}

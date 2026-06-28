@@ -13,4 +13,5 @@ export * from './vector.js';
 export * from './text.js';
 export * from './curation.js';
 export * from './review.js';
+export * from './markdown.js';
 export * from './store.js';

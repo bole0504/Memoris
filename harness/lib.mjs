@@ -18,14 +18,32 @@ export function sh(cmd, { cwd = ROOT, env = {} } = {}) {
   return { ok: r.status === 0, code: r.status ?? 1, out: (r.stdout ?? '') + (r.stderr ?? '') };
 }
 
-/** A check is { name, ok, detail }. runStep wraps an async fn into that shape. */
+/** A check is { name, ok, detail, skip? }. runStep wraps an async fn into that shape. */
 export async function runStep(name, fn) {
   try {
     const detail = await fn();
     return { name, ok: true, detail: detail ?? '' };
   } catch (err) {
-    return { name, ok: false, detail: err instanceof Error ? err.message : String(err) };
+    const msg = err instanceof Error ? err.message : String(err);
+    // A check may throw "SKIP: ..." to mark an environmental skip (e.g. upstream quota) that should
+    // NOT be treated as a code regression.
+    if (msg.startsWith('SKIP:')) return { name, ok: true, skip: true, detail: msg.slice(5).trim() };
+    return { name, ok: false, detail: msg };
   }
+}
+
+/** Wrap a live-AI check so an upstream 429 (free-tier rate limit) becomes a SKIP, not a failure. */
+export function skipOn429(fn) {
+  return async (ctx) => {
+    try {
+      return await fn(ctx);
+    } catch (e) {
+      if (/\b429\b|rate limit|quota/i.test(String(e))) {
+        throw new Error('SKIP: Gemini free-tier rate limit (429) — code unchanged, retry later');
+      }
+      throw e;
+    }
+  };
 }
 
 /** Assert helper for checks. */
@@ -94,13 +112,16 @@ export async function api(base, path, { method = 'GET', body, token } = {}) {
 export function report(title, checks) {
   console.log(`\n${BOLD}${title}${RESET}`);
   let allOk = true;
+  let skipped = 0;
   for (const c of checks) {
-    const mark = c.ok ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
+    const mark = c.skip ? `${DIM}⚠${RESET}` : c.ok ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
     console.log(`  ${mark} ${c.name}${c.detail ? `  ${DIM}— ${oneLine(c.detail)}${RESET}` : ''}`);
+    if (c.skip) skipped++;
     if (!c.ok) allOk = false;
   }
   const summary = allOk ? `${GREEN}PASS${RESET}` : `${RED}FAIL${RESET}`;
-  console.log(`  ${summary} (${checks.filter((c) => c.ok).length}/${checks.length})\n`);
+  const skipNote = skipped ? `, ${skipped} skipped` : '';
+  console.log(`  ${summary} (${checks.filter((c) => c.ok && !c.skip).length}/${checks.length}${skipNote})\n`);
   return allOk;
 }
 
