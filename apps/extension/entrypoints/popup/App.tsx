@@ -64,6 +64,10 @@ export function App() {
     setLocalSettings(await setSettings({ targetLanguage: code }));
   }
 
+  async function onApiUrl(url: string) {
+    setLocalSettings(await setSettings({ apiBaseUrl: url.replace(/\/+$/, '') }));
+  }
+
   const [domain, setDomain] = useState('');
   async function addPrivateDomain() {
     const d = domain.trim().toLowerCase();
@@ -105,6 +109,18 @@ export function App() {
     <div className="w-80 bg-white p-5 font-sans text-slate-800">
       <h1 className="text-lg font-semibold text-indigo-600">Memoris</h1>
       <p className="mt-0.5 text-xs text-slate-500">Second brain for working in a second language.</p>
+
+      {mode !== 'review' && (
+        <div className="mt-3">
+          <label className="block text-[11px] font-medium text-slate-500">Server URL (gateway)</label>
+          <input
+            value={settings?.apiBaseUrl ?? ''}
+            onChange={(e) => void onApiUrl(e.target.value)}
+            placeholder="http://165.22.109.245:3000"
+            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+        </div>
+      )}
 
       {mode === 'review' && me ? (
         <div className="mt-4">

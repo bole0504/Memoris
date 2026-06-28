@@ -18,6 +18,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     if (!email || !email.includes('@')) {
       return reply.code(400).send({ error: { code: 'bad_request', message: 'valid email required' } });
     }
+    if (env.devLoginAllowedEmails.length && !env.devLoginAllowedEmails.includes(email)) {
+      return reply.code(403).send({ error: { code: 'forbidden', message: 'email not allowed' } });
+    }
     const user = await upsertUser(email, req.body?.name);
     const authUser = { id: user.id, email: user.email };
     return {

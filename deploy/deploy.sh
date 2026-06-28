@@ -1,44 +1,69 @@
 #!/usr/bin/env bash
-# Deploy prebuilt artifacts to the staging VPS. Builds happen HERE, never on the box.
-# Usage: ./deploy/deploy.sh
+# Build the Memoris gateway on THIS machine (your laptop) and ship prebuilt artifacts to the VPS.
+# The 512 MB box never builds — it only `npm install`s the ~6 runtime deps (linux Prisma engine).
+#
+# Requirements: laptop -> VPS SSH must already work; the VPS already has node + pm2 (capnhatgia uses it).
+#
+# Usage (override any of these as env vars):
+#   VPS_HOST=root@165.22.109.245 PORT=3000 ./deploy/deploy.sh
 set -euo pipefail
 
-VPS_HOST="${VPS_HOST:-root@165.22.109.245}"
-REMOTE_ROOT="${REMOTE_ROOT:-/opt/memoris}"
+VPS_HOST="${VPS_HOST:-root@165.22.109.245}"     # ssh target
+REMOTE_DIR="${REMOTE_DIR:-/opt/memoris/server}"  # where it lives on the box
+APP_NAME="${APP_NAME:-memoris-server}"           # pm2 process name
+PORT="${PORT:-3000}"                             # change if 3000 is taken (check: ss -ltnp)
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
-echo "==> Building artifacts locally"
-pnpm install --frozen-lockfile
-pnpm --filter @memoris/shared build
-pnpm --filter @memoris/server build
-pnpm --filter @memoris/dashboard build
-
-echo "==> Preparing production server bundle"
 STAGE="$(mktemp -d)"
-mkdir -p "$STAGE/server"
-cp -R "$ROOT/apps/server/dist" "$STAGE/server/dist"
-cp -R "$ROOT/apps/server/prisma" "$STAGE/server/prisma"
-cp "$ROOT/apps/server/package.json" "$STAGE/server/package.json"
-cp "$ROOT/apps/server/.env.example" "$STAGE/server/.env.example"
+trap 'rm -rf "$STAGE"' EXIT
 
-echo "==> Shipping server (rsync)"
-rsync -az --delete \
-  --exclude node_modules \
-  "$STAGE/server/" "$VPS_HOST:$REMOTE_ROOT/server/"
+echo "==> 1/5  Build the server (tsc) on this machine"
+pnpm install --frozen-lockfile
+pnpm --filter @memoris/server build
 
-echo "==> Shipping dashboard static files (rsync)"
-rsync -az --delete "$ROOT/apps/dashboard/dist/" "$VPS_HOST:$REMOTE_ROOT/dashboard/"
+echo "==> 2/5  Stage a self-contained runtime bundle"
+cp -R "$ROOT/apps/server/dist" "$STAGE/dist"
+cp -R "$ROOT/apps/server/prisma" "$STAGE/prisma"
+# Ship your .env (holds GEMINI_API_KEY etc). Falls back to the example — edit it on the box if so.
+cp "$ROOT/apps/server/.env" "$STAGE/.env" 2>/dev/null || cp "$ROOT/apps/server/.env.example" "$STAGE/.env"
+# Generate a clean package.json: drop workspace:* deps (@memoris/shared is type-only, erased by
+# tsc, so the runtime never needs it) and keep only what `node dist/index.js` actually requires.
+node -e '
+  const fs = require("fs");
+  const src = require(process.argv[1]);
+  const deps = {};
+  for (const [k, v] of Object.entries(src.dependencies || {})) {
+    if (!String(v).startsWith("workspace:")) deps[k] = v;
+  }
+  deps.prisma = (src.devDependencies || {}).prisma || "^6.3.0"; // CLI for generate/db push
+  fs.writeFileSync(process.argv[2], JSON.stringify({
+    name: "memoris-server", version: src.version || "0.0.0", private: true, type: "module",
+    scripts: { start: "node --env-file=.env dist/index.js" }, dependencies: deps,
+  }, null, 2));
+' "$ROOT/apps/server/package.json" "$STAGE/package.json"
 
-echo "==> Installing prod deps + migrating + restarting on the box"
-ssh "$VPS_HOST" bash -se <<'REMOTE'
+echo "==> 3/5  Upload to $VPS_HOST:$REMOTE_DIR"
+ssh "$VPS_HOST" "mkdir -p '$REMOTE_DIR'"
+# --delete keeps the box in sync; never wipe the live SQLite db or node_modules.
+rsync -az --delete --exclude node_modules --exclude '*.db' "$STAGE/" "$VPS_HOST:$REMOTE_DIR/"
+
+echo "==> 4/5  Install prod deps + Prisma on the box (linux binaries)"
+ssh "$VPS_HOST" bash -se <<REMOTE
 set -euo pipefail
-cd /opt/memoris/server
+cd "$REMOTE_DIR"
 npm install --omit=dev --no-audit --no-fund
 npx prisma generate
-npx prisma migrate deploy
-pm2 restart memoris-server || pm2 start "node --env-file=.env dist/index.js" --name memoris-server
+npx prisma db push
+REMOTE
+
+echo "==> 5/5  (Re)start under pm2 on port $PORT (alongside capnhatgia)"
+ssh "$VPS_HOST" bash -se <<REMOTE
+set -euo pipefail
+cd "$REMOTE_DIR"
+pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
+PORT="$PORT" HOST="0.0.0.0" pm2 start "node --env-file=.env dist/index.js" --name "$APP_NAME"
 pm2 save
 REMOTE
 
-rm -rf "$STAGE"
-echo "==> Done. Verify: curl https://<your-domain>/health"
+echo "==> Done. Test from the VPS:  curl http://127.0.0.1:$PORT/health"
+echo "    From outside (open the port/firewall first):  curl http://<vps-ip>:$PORT/health"

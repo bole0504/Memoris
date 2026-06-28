@@ -24,4 +24,11 @@ export const env = {
 
   freeDailyAiLookups: num(process.env.FREE_DAILY_AI_LOOKUPS, 50),
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+
+  // When set (comma-separated), only these emails may use the dev login. Protects a publicly
+  // exposed gateway from strangers burning your Gemini quota. Empty = allow any (local dev).
+  devLoginAllowedEmails: (process.env.DEV_LOGIN_ALLOWED_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
 } as const;
