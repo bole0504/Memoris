@@ -1,0 +1,40 @@
+// Server-side SQLite — users / quota / billing only.
+// The "brain" (encounters, concepts, embeddings) lives locally in the client
+// (IndexedDB v0 → sqlite-vec in the Obsidian plugin), NOT here. See docs/ARCHITECTURE.md §7.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// An authenticated user (Google OAuth → JWT). Auth itself is wired up in Phase 1;
+/// the model exists now so migrations and the gateway have a home from day one.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  /// "free" | "pro" — plan gating is enforced at the gateway (Phase 5).
+  plan      String   @default("free")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usage UsageDay[]
+}
+
+/// Per-user, per-day AI lookup counter for quota enforcement (Phase 5).
+model UsageDay {
+  id      String @id @default(cuid())
+  userId  String
+  /// Day bucket, "YYYY-MM-DD".
+  day     String
+  /// Number of Tier-2 (real AI) lookups made that day.
+  lookups Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+}

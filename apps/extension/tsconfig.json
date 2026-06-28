@@ -1,0 +1,8 @@
+{
+  // WXT generates .wxt/tsconfig.json with the right paths/types for the extension runtime.
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    // WXT applies JSX via its bundler; set it here too so `tsc --noEmit` type-checks JSX.
+    "jsx": "react-jsx"
+  }
+}
