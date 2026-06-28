@@ -13,4 +13,15 @@ export const env = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
+  geminiEmbedModel: process.env.GEMINI_EMBED_MODEL ?? 'text-embedding-004',
+
+  jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-change-me',
+  jwtAccessTtlMin: num(process.env.JWT_ACCESS_TTL_MIN, 15),
+  jwtRefreshTtlDays: num(process.env.JWT_REFRESH_TTL_DAYS, 30),
+
+  freeDailyAiLookups: num(process.env.FREE_DAILY_AI_LOOKUPS, 50),
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
 } as const;

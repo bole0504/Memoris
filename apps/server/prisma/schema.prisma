@@ -23,6 +23,21 @@ model User {
   updatedAt DateTime @updatedAt
 
   usage UsageDay[]
+  stats Stats?
+}
+
+/// A lightweight stats snapshot pushed by the client so the dashboard can show "your memory
+/// growing" WITHOUT the server holding concept content (content stays local — privacy).
+/// Counts only; topConcepts is a small JSON array of { text, encounterCount }.
+model Stats {
+  userId       String   @id
+  concepts     Int      @default(0)
+  encounters   Int      @default(0)
+  streakDays   Int      @default(0)
+  topConcepts  String   @default("[]")
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 /// Per-user, per-day AI lookup counter for quota enforcement (Phase 5).
