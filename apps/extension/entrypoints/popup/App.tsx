@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { login, getMe, type MeResponse } from '../../lib/api.js';
 import { getAuth, setAuth, getSettings, setSettings, type Settings } from '../../lib/storage.js';
+import { getBrain } from '../../lib/brain.js';
+import { Review } from './Review.js';
 
 const LANGS = [
   { code: 'vi', label: 'Tiếng Việt' },
@@ -16,9 +18,16 @@ export function App() {
   const [settings, setLocalSettings] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'home' | 'review'>('home');
+  const [dueCount, setDueCount] = useState(0);
 
   async function refresh() {
     setLocalSettings(await getSettings());
+    try {
+      setDueCount((await getBrain().dueReviews()).length);
+    } catch {
+      /* no brain yet */
+    }
     if (await getAuth()) {
       try {
         setMe(await getMe());
@@ -72,7 +81,16 @@ export function App() {
       <h1 className="text-lg font-semibold text-indigo-600">Memoris</h1>
       <p className="mt-0.5 text-xs text-slate-500">Second brain for working in a second language.</p>
 
-      {!me ? (
+      {mode === 'review' && me ? (
+        <div className="mt-4">
+          <Review
+            onExit={() => {
+              setMode('home');
+              void refresh();
+            }}
+          />
+        </div>
+      ) : !me ? (
         <div className="mt-4 space-y-2">
           <label className="block text-xs font-medium text-slate-600">Sign in (dev)</label>
           <input
@@ -100,6 +118,13 @@ export function App() {
               {me.dailyLimit != null ? ` / ${me.dailyLimit}` : ' (unlimited)'}
             </p>
           </div>
+
+          <button
+            onClick={() => setMode('review')}
+            className="w-full rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+          >
+            {dueCount > 0 ? `Review now (${dueCount} due)` : 'Review'}
+          </button>
 
           <div>
             <label className="block text-xs font-medium text-slate-600">Translate into</label>

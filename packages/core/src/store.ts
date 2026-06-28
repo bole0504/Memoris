@@ -279,6 +279,48 @@ export class MemoryStore {
     return concepts.filter((c) => isDue(c.review, now));
   }
 
+  /** Due concepts, most-overdue first — the review queue order. */
+  async reviewQueue(now = this.clock.now()): Promise<StoredConcept[]> {
+    const due = await this.dueReviews(now);
+    return due.sort((a, b) => {
+      const ta = a.review.nextReview ? Date.parse(a.review.nextReview) : 0;
+      const tb = b.review.nextReview ? Date.parse(b.review.nextReview) : 0;
+      return ta - tb;
+    });
+  }
+
+  /**
+   * Build a review card: the concept plus a real source encounter to replay ("Today's review is
+   * from your real GitHub PR" — docs/ROADMAP.md Phase 3). Picks the most recent encounter.
+   */
+  async buildReviewCard(conceptId: string): Promise<{ concept: StoredConcept; source?: Encounter } | undefined> {
+    const concept = await this.adapter.getConcept(conceptId);
+    if (!concept) return undefined;
+    const encounters = await this.conceptEncounters(conceptId);
+    encounters.sort((a, b) => Date.parse(b.capturedAt) - Date.parse(a.capturedAt));
+    return { concept, source: encounters[0] };
+  }
+
+  /** Weak concepts (low mastery) — candidates for targeted review. */
+  async weakConcepts(threshold = 0.4): Promise<StoredConcept[]> {
+    const concepts = await this.adapter.listConcepts();
+    return concepts
+      .filter((c) => c.review.mastery < threshold)
+      .sort((a, b) => a.review.mastery - b.review.mastery);
+  }
+
+  /** Confusion pairs — concepts linked `confused-with`, for paired/targeted review. */
+  async confusionPairs(): Promise<{ a: StoredConcept; b: StoredConcept }[]> {
+    const links = (await this.adapter.listLinks()).filter((l) => l.type === 'confused-with');
+    const out: { a: StoredConcept; b: StoredConcept }[] = [];
+    for (const l of links) {
+      const a = await this.adapter.getConcept(l.fromConceptId);
+      const b = await this.adapter.getConcept(l.toConceptId);
+      if (a && b) out.push({ a, b });
+    }
+    return out;
+  }
+
   /** Record the outcome of a review and reschedule. */
   async gradeReview(conceptId: string, grade: ReviewGrade): Promise<StoredConcept> {
     const concept = await this.adapter.getConcept(conceptId);

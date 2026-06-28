@@ -207,4 +207,40 @@ describe('MemoryStore — capture loop', () => {
     expect(graded.review.mastery).toBeGreaterThan(0);
     expect(await store.dueReviews()).toHaveLength(0); // pushed into the future
   });
+
+  it('review card replays a real source encounter', async () => {
+    const r = await store.lookup(capture('idempotent'));
+    const c = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });
+    const card = await store.buildReviewCard(c.id);
+    expect(card?.concept.text).toBe('idempotent');
+    expect(card?.source?.source.domain).toBe('github.com');
+    expect(card?.source?.selection).toBe('idempotent');
+  });
+
+  it('review queue is ordered most-overdue first', async () => {
+    const r1 = await store.lookup(capture('alpha'));
+    const a = await store.remember({ encounterId: r1.encounter.id, text: 'alpha' });
+    const r2 = await store.lookup(capture('beta'));
+    const b = await store.remember({ encounterId: r2.encounter.id, text: 'beta' });
+    // Make alpha more overdue than beta.
+    clock.advance(5 * 24 * 60 * 60 * 1000);
+    await store.gradeReview(b.id, 'good'); // beta pushed further out, then bring both due
+    clock.advance(40 * 24 * 60 * 60 * 1000);
+    const queue = await store.reviewQueue();
+    expect(queue.map((c) => c.id)).toEqual(expect.arrayContaining([a.id, b.id]));
+    expect(queue[0]!.id).toBe(a.id); // alpha never graded → due earlier
+  });
+
+  it('weak concepts and confusion pairs surface for targeted review', async () => {
+    const r1 = await store.lookup(capture('affect'));
+    const a = await store.remember({ encounterId: r1.encounter.id, text: 'affect' });
+    const r2 = await store.lookup(capture('effect'));
+    const b = await store.remember({ encounterId: r2.encounter.id, text: 'effect' });
+    await store.addLink(a.id, b.id, 'confused-with');
+
+    expect((await store.weakConcepts(0.4)).length).toBe(2); // both start at mastery 0
+    const pairs = await store.confusionPairs();
+    expect(pairs).toHaveLength(1);
+    expect([pairs[0]!.a.text, pairs[0]!.b.text].sort()).toEqual(['affect', 'effect']);
+  });
 });
