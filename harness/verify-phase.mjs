@@ -146,12 +146,22 @@ const live = {
       },
     },
     {
-      name: 'P5: free quota is enforced at the gateway',
+      name: 'P5: free plan exposes a daily AI limit (quota enforced at gateway)',
       fn: async ({ base, token }) => {
         const r = await api(base, '/v1/me', { token });
-        assert(r.plan, 'no plan on user');
-        assert(typeof r.usageToday === 'number', 'no usage counter');
-        return `plan ${r.plan}, used ${r.usageToday}`;
+        assert(r.plan === 'free', `expected free, got ${r.plan}`);
+        assert(typeof r.dailyLimit === 'number' && r.dailyLimit > 0, 'free plan has no daily limit');
+        return `plan ${r.plan}, limit ${r.dailyLimit}, used ${r.usageToday}`;
+      },
+    },
+    {
+      name: 'P5: upgrading to Pro removes the daily cap',
+      fn: async ({ base, token }) => {
+        await api(base, '/v1/billing/dev-set-plan', { method: 'POST', token, body: { plan: 'pro' } });
+        const pro = await api(base, '/v1/me', { token });
+        assert(pro.plan === 'pro' && pro.dailyLimit === null, 'pro should be unlimited');
+        await api(base, '/v1/billing/dev-set-plan', { method: 'POST', token, body: { plan: 'free' } });
+        return 'free → pro → free';
       },
     },
     {
