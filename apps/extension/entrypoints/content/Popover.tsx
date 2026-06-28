@@ -23,6 +23,7 @@ type View =
 export function Popover({ selection, context, source, rect, onClose }: PopoverProps) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const savedConceptIds = useRef<string[]>([]);
   const depsRef = useRef<CaptureDeps | null>(null);
 
   useEffect(() => {
@@ -54,8 +55,14 @@ export function Popover({ selection, context, source, rect, onClose }: PopoverPr
     if (view.kind !== 'ready' || !depsRef.current) return;
     const unit = view.state.analysis.proposedUnits.find((u) => u.text === unitText);
     if (!unit) return;
-    await rememberUnit(view.state, unit, depsRef.current);
+    const concept = await rememberUnit(view.state, unit, depsRef.current);
     setSaved((s) => new Set(s).add(unitText));
+
+    // Units saved from the same passage co-occur in the user's real work → link them.
+    savedConceptIds.current.push(concept.id);
+    if (savedConceptIds.current.length >= 2) {
+      await depsRef.current.brain.linkCoOccurrence(savedConceptIds.current);
+    }
     // Best-effort stats push so the dashboard reflects growth.
     try {
       const stats = await depsRef.current.brain.stats();

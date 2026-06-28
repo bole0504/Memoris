@@ -3,7 +3,7 @@ import type { StorageAdapter } from './adapter.js';
 import type { CaptureInput, Clock, LookupResult, StoredConcept } from './types.js';
 import { systemClock } from './types.js';
 import { normalizeKey } from './text.js';
-import { nearest } from './vector.js';
+import { nearest, cosineSimilarity } from './vector.js';
 import { decideCuration, type CurationVerdict } from './curation.js';
 import { applyReExposure, applyReview, initialReviewState, isDue, type ReviewGrade } from './review.js';
 
@@ -190,6 +190,85 @@ export class MemoryStore {
 
   async listLinks(): Promise<Link[]> {
     return this.adapter.listLinks();
+  }
+
+  // --- Dedup / merge / linking (Phase 2 — the moat) ---
+
+  /**
+   * Link a set of concepts that were saved from the SAME encounter as `co-occurs` (pairwise).
+   * This is real co-occurrence in the user's own work, not a generic ontology
+   * (docs/ARCHITECTURE.md §9).
+   */
+  async linkCoOccurrence(conceptIds: string[]): Promise<Link[]> {
+    const unique = [...new Set(conceptIds)];
+    const links: Link[] = [];
+    for (let i = 0; i < unique.length; i++) {
+      for (let j = i + 1; j < unique.length; j++) {
+        links.push(await this.addLink(unique[i]!, unique[j]!, 'co-occurs'));
+      }
+    }
+    return links;
+  }
+
+  /**
+   * Find near-duplicate concept pairs by embedding similarity (high threshold). Candidates for
+   * merge; the UI / a rubric decides whether to actually merge.
+   */
+  async findDuplicatePairs(threshold = 0.95): Promise<{ a: StoredConcept; b: StoredConcept; similarity: number }[]> {
+    const concepts = (await this.adapter.listConcepts()).filter((c) => c.embedding?.length);
+    const pairs: { a: StoredConcept; b: StoredConcept; similarity: number }[] = [];
+    for (let i = 0; i < concepts.length; i++) {
+      for (let j = i + 1; j < concepts.length; j++) {
+        const a = concepts[i]!;
+        const b = concepts[j]!;
+        const sim = cosineSimilarity(a.embedding!, b.embedding!);
+        if (sim >= threshold) pairs.push({ a, b, similarity: sim });
+      }
+    }
+    return pairs;
+  }
+
+  /**
+   * Merge `dupId` into `targetId`: combine encounters/counts, repoint encounters & links, delete
+   * the duplicate. Returns the surviving concept.
+   */
+  async mergeConcepts(targetId: string, dupId: string): Promise<StoredConcept> {
+    if (targetId === dupId) throw new Error('cannot merge a concept into itself');
+    const target = await this.adapter.getConcept(targetId);
+    const dup = await this.adapter.getConcept(dupId);
+    if (!target || !dup) throw new Error('concept not found');
+
+    const mergedEncounterIds = [...new Set([...target.encounterIds, ...dup.encounterIds])];
+    target.encounterIds = mergedEncounterIds;
+    target.encounterCount += dup.encounterCount;
+    if (!target.embedding && dup.embedding) target.embedding = dup.embedding;
+
+    // Repoint the duplicate's encounters at the survivor.
+    for (const id of dup.encounterIds) {
+      const e = await this.adapter.getEncounter(id);
+      if (e && e.conceptId === dupId) {
+        e.conceptId = targetId;
+        await this.adapter.putEncounter(e);
+      }
+    }
+
+    // Repoint links, dropping any that would become self-links or duplicates.
+    for (const link of await this.adapter.listLinks()) {
+      let changed = false;
+      if (link.fromConceptId === dupId) {
+        link.fromConceptId = targetId;
+        changed = true;
+      }
+      if (link.toConceptId === dupId) {
+        link.toConceptId = targetId;
+        changed = true;
+      }
+      if (changed) await this.adapter.putLink(link);
+    }
+
+    await this.adapter.putConcept(target);
+    await this.adapter.deleteConcept(dupId);
+    return target;
   }
 
   // --- Review (Phase 3) ---

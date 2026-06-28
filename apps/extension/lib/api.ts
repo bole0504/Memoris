@@ -83,6 +83,17 @@ export async function embed(text: string): Promise<number[]> {
   return r.embedding;
 }
 
+export interface CurateResponse {
+  worthRemembering: boolean;
+  reason: string;
+  suggestedType: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export async function curate(text: string, targetLanguage: string, context?: string): Promise<CurateResponse> {
+  return request<CurateResponse>('/v1/curate', { method: 'POST', body: { text, targetLanguage, context } });
+}
+
 export interface MeResponse {
   email: string;
   plan: string;

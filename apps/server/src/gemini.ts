@@ -20,6 +20,27 @@ export class GeminiError extends Error {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * POST to Gemini with retry on transient overload (429/503) — common on the free tier. Keeps the
+ * gateway resilient so callers (and the harness) don't see flaky failures.
+ */
+async function postWithRetry(url: string, body: unknown, attempts = 3): Promise<Response> {
+  let last: Response | undefined;
+  for (let i = 0; i < attempts; i++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok || (res.status !== 429 && res.status !== 503)) return res;
+    last = res;
+    await sleep(400 * (i + 1) + Math.floor(((i + 1) * 137) % 200));
+  }
+  return last!;
+}
+
 interface GenerateOptions {
   model?: string;
   temperature?: number;
@@ -41,13 +62,9 @@ export async function generate(prompt: string, opts: GenerateOptions = {}): Prom
     generationConfig.responseSchema = opts.responseSchema;
   }
 
-  const res = await fetch(`${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig,
-    }),
+  const res = await postWithRetry(`${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig,
   });
 
   if (!res.ok) {
@@ -75,13 +92,9 @@ export async function generateJSON<T>(prompt: string, schema: unknown, opts: Gen
 /** Embedding for a single text. Used by Tier-1 semantic search (Phase 2). */
 export async function embed(text: string, model = env.geminiEmbedModel): Promise<number[]> {
   if (!env.geminiApiKey) throw new GeminiError('GEMINI_API_KEY is not set', 500);
-  const res = await fetch(`${BASE}/models/${model}:embedContent?key=${env.geminiApiKey}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: `models/${model}`,
-      content: { parts: [{ text }] },
-    }),
+  const res = await postWithRetry(`${BASE}/models/${model}:embedContent?key=${env.geminiApiKey}`, {
+    model: `models/${model}`,
+    content: { parts: [{ text }] },
   });
   if (!res.ok) {
     const body = await res.text();

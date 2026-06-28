@@ -54,6 +54,19 @@ export function App() {
     setLocalSettings(await setSettings({ targetLanguage: code }));
   }
 
+  const [domain, setDomain] = useState('');
+  async function addPrivateDomain() {
+    const d = domain.trim().toLowerCase();
+    if (!d) return;
+    const current = settings?.privateDomains ?? [];
+    if (!current.includes(d)) setLocalSettings(await setSettings({ privateDomains: [...current, d] }));
+    setDomain('');
+  }
+  async function removePrivateDomain(d: string) {
+    const current = settings?.privateDomains ?? [];
+    setLocalSettings(await setSettings({ privateDomains: current.filter((x) => x !== d) }));
+  }
+
   return (
     <div className="w-80 bg-white p-5 font-sans text-slate-800">
       <h1 className="text-lg font-semibold text-indigo-600">Memoris</h1>
@@ -101,6 +114,41 @@ export function App() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600">
+              Private domains (never sent to cloud)
+            </label>
+            <div className="mt-1 flex gap-1">
+              <input
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                placeholder="jira.company.com"
+                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs"
+              />
+              <button
+                onClick={() => void addPrivateDomain()}
+                className="rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-600"
+              >
+                Add
+              </button>
+            </div>
+            {!!settings?.privateDomains.length && (
+              <ul className="mt-1.5 space-y-1">
+                {settings.privateDomains.map((d) => (
+                  <li key={d} className="flex items-center justify-between text-xs text-slate-600">
+                    <span className="truncate">{d}</span>
+                    <button
+                      onClick={() => void removePrivateDomain(d)}
+                      className="text-slate-400 hover:text-rose-600"
+                    >
+                      remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <p className="text-xs text-slate-500">

@@ -36,6 +36,34 @@ export const ANALYZE_SCHEMA = {
   required: ['translation', 'gloss', 'proposedUnits'],
 } as const;
 
+/** Schema for the curation rubric (docs/ARCHITECTURE.md §4 — "worth remembering?"). */
+export const CURATE_SCHEMA = {
+  type: 'object',
+  properties: {
+    worthRemembering: { type: 'boolean' },
+    reason: { type: 'string' },
+    suggestedType: { type: 'string', enum: CONCEPT_TYPES },
+    difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+  },
+  required: ['worthRemembering', 'reason', 'suggestedType', 'difficulty'],
+} as const;
+
+/**
+ * Curation rubric prompt — the LLM half of "worth remembering?" for borderline cases the heuristic
+ * isn't sure about. Judges novelty/difficulty for a non-native English-speaking professional.
+ */
+export function curatePrompt(text: string, targetLanguage: string, context?: string): string {
+  return [
+    `A non-native English speaker (native language "${targetLanguage}") working in English is deciding whether to memorize a unit they met at work.`,
+    `Decide if it is worth remembering: true only for jargon, idioms, phrasal verbs, collocations, or unusual grammar that a professional would benefit from retaining. false for trivial common words.`,
+    `Give a short reason, the best concept type, and a difficulty.`,
+    context ? `\nCONTEXT: ${context}` : '',
+    `\nUNIT: ${text}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 /**
  * Prompt for the fast Tier-2 analyze step. Translate, gloss, and extract ONLY worth-remembering
  * units (terms, idioms, phrasal verbs, collocations, unusual grammar) — never everything, or the

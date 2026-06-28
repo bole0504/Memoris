@@ -16,7 +16,7 @@ export const env = {
 
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
-  geminiEmbedModel: process.env.GEMINI_EMBED_MODEL ?? 'text-embedding-004',
+  geminiEmbedModel: process.env.GEMINI_EMBED_MODEL ?? 'gemini-embedding-001',
 
   jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-change-me',
   jwtAccessTtlMin: num(process.env.JWT_ACCESS_TTL_MIN, 15),

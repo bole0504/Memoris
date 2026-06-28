@@ -153,6 +153,47 @@ describe('MemoryStore — capture loop', () => {
     expect(await store.listLinks()).toHaveLength(1);
   });
 
+  it('co-occurrence: units saved from one capture get pairwise co-occurs links', async () => {
+    const r = await store.lookup(capture('use idempotent retry logic'));
+    const a = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });
+    const b = await store.remember({ encounterId: r.encounter.id, text: 'retry logic' });
+    await store.linkCoOccurrence([a.id, b.id]);
+    const links = await store.listLinks();
+    expect(links).toHaveLength(1);
+    expect(links[0]!.type).toBe('co-occurs');
+  });
+
+  it('dedup: finds near-duplicate concepts by embedding and merges them', async () => {
+    const r1 = await store.lookup(capture('idempotent'), [1, 0, 0]);
+    const a = await store.remember({ encounterId: r1.encounter.id, text: 'idempotent', embedding: [1, 0, 0] });
+    const r2 = await store.lookup(capture('idempotence'));
+    const b = await store.remember({ encounterId: r2.encounter.id, text: 'idempotence', embedding: [0.999, 0.01, 0] });
+
+    const pairs = await store.findDuplicatePairs(0.95);
+    expect(pairs).toHaveLength(1);
+
+    const merged = await store.mergeConcepts(a.id, b.id);
+    expect(merged.encounterCount).toBe(2);
+    expect(await store.getConcept(b.id)).toBeUndefined();
+    const encs = await store.conceptEncounters(a.id);
+    expect(encs).toHaveLength(2);
+  });
+
+  it('merge repoints links from the duplicate onto the survivor', async () => {
+    const r1 = await store.lookup(capture('affect'));
+    const a = await store.remember({ encounterId: r1.encounter.id, text: 'affect' });
+    const r2 = await store.lookup(capture('effect'));
+    const b = await store.remember({ encounterId: r2.encounter.id, text: 'effect' });
+    const r3 = await store.lookup(capture('efect'));
+    const dup = await store.remember({ encounterId: r3.encounter.id, text: 'efect' });
+    await store.addLink(a.id, dup.id, 'confused-with');
+
+    await store.mergeConcepts(b.id, dup.id);
+    const links = await store.listLinks();
+    expect(links).toHaveLength(1);
+    expect(links[0]!.toConceptId).toBe(b.id);
+  });
+
   it('review lifecycle: a saved concept becomes due, then reschedules on grade', async () => {
     const r = await store.lookup(capture('idempotent'));
     const c = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });

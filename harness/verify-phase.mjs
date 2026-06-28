@@ -108,14 +108,23 @@ const live = {
       },
     },
     {
-      name: 'P2: curation engine logic covered by unit tests',
+      name: 'P2: /v1/curate returns an LLM worth-remembering rubric (live Gemini)',
+      fn: async ({ base, token }) => {
+        const r = await api(base, '/v1/curate', {
+          method: 'POST',
+          token,
+          body: { text: 'idempotent', targetLanguage: 'vi' },
+        });
+        assert(typeof r.worthRemembering === 'boolean', 'no verdict');
+        assert(['easy', 'medium', 'hard'].includes(r.difficulty), 'no difficulty');
+        return `worth=${r.worthRemembering}, ${r.difficulty}`;
+      },
+    },
+    {
+      name: 'P2: dedup/merge + co-occurrence + tier-0/1 covered by unit tests',
       fn: async () => {
-        // The tier-0/tier-1/curation behavior is asserted in @memoris/core store.test.ts,
-        // which the static "unit tests" gate already ran.
-        assert(
-          existsSync(join(ROOT, 'packages/core/src/store.test.ts')),
-          'core store tests missing',
-        );
+        // Asserted in @memoris/core store.test.ts (run by the static "unit tests" gate).
+        assert(existsSync(join(ROOT, 'packages/core/src/store.test.ts')), 'core store tests missing');
       },
     },
   ],
