@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Source } from '@memoris/shared';
+import { uuid } from '../../lib/uuid.js';
 import { Popover } from './Popover.js';
 
 export interface CaptureWidgetProps {
@@ -17,7 +18,7 @@ export interface CaptureWidgetProps {
  */
 export function CaptureWidget({ selection, context, source, rect, onClose }: CaptureWidgetProps) {
   const [opened, setOpened] = useState(false);
-  const captureId = useRef(crypto.randomUUID()).current;
+  const captureId = useRef(uuid()).current;
 
   if (opened) {
     return (

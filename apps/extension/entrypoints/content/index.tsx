@@ -1,6 +1,7 @@
 import { createRoot, type Root } from 'react-dom/client';
 import type { Source } from '@memoris/shared';
 import { getSettings } from '../../lib/storage.js';
+import { uuid } from '../../lib/uuid.js';
 import { CaptureWidget } from './CaptureWidget.js';
 import './style.css';
 
@@ -19,7 +20,7 @@ export default defineContentScript({
     function describeSource(): Source {
       const url = new URL(location.href);
       return {
-        id: crypto.randomUUID(),
+        id: uuid(),
         app: url.hostname.replace(/^www\./, ''),
         domain: url.hostname,
         url: location.href,
