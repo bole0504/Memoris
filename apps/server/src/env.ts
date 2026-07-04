@@ -17,6 +17,12 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
   geminiEmbedModel: process.env.GEMINI_EMBED_MODEL ?? 'gemini-embedding-001',
+  // Tried in order when the primary model returns 429/503 (transient). Different models rarely
+  // overload at once, so this makes a lookup almost always succeed.
+  geminiFallbackModels: (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-2.0-flash')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
 
   jwtSecret: process.env.JWT_SECRET ?? 'dev-insecure-change-me',
   jwtAccessTtlMin: num(process.env.JWT_ACCESS_TTL_MIN, 15),

@@ -75,7 +75,6 @@ export async function generate(
   opts: GenerateOptions = {},
 ): Promise<{ text: string; meta: CallMeta }> {
   if (!env.geminiApiKey) throw new GeminiError('GEMINI_API_KEY is not set', 500);
-  const model = opts.model ?? env.geminiModel;
   const generationConfig: Record<string, unknown> = {
     temperature: opts.temperature ?? 0.2,
     maxOutputTokens: opts.maxOutputTokens ?? 1024,
@@ -84,24 +83,45 @@ export async function generate(
     generationConfig.responseMimeType = 'application/json';
     generationConfig.responseSchema = opts.responseSchema;
   }
+  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig };
+
+  // Try the primary model, then fall back to alternates on transient 429/503.
+  const models = [opts.model ?? env.geminiModel, ...env.geminiFallbackModels].filter(
+    (m, i, a) => a.indexOf(m) === i,
+  );
 
   const t0 = Date.now();
-  const { res, attempts } = await postWithRetry(
-    `${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`,
-    { contents: [{ parts: [{ text: prompt }] }], generationConfig },
-    opts,
-  );
-  const aiMs = Date.now() - t0;
-  console.info(`[gemini] op=generate model=${model} ms=${aiMs} attempts=${attempts} status=${res.status}`);
+  let totalAttempts = 0;
+  let lastError: GeminiError | undefined;
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new GeminiError(`Gemini ${res.status}: ${body.slice(0, 200)}`, res.status);
+  for (let mi = 0; mi < models.length; mi++) {
+    const model = models[mi]!;
+    const { res, attempts } = await postWithRetry(
+      `${BASE}/models/${model}:generateContent?key=${env.geminiApiKey}`,
+      body,
+      opts,
+    );
+    totalAttempts += attempts;
+
+    if (res.ok) {
+      const aiMs = Date.now() - t0;
+      const tag = mi > 0 ? ' (fallback)' : '';
+      console.info(`[gemini] op=generate model=${model} ms=${aiMs} attempts=${totalAttempts} status=200${tag}`);
+      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new GeminiError('Gemini returned no text', 502);
+      return { text, meta: { aiMs, attempts: totalAttempts, status: 200 } };
+    }
+
+    const errText = await res.text();
+    lastError = new GeminiError(`Gemini ${res.status}: ${errText.slice(0, 200)}`, res.status);
+    const transient = res.status === 429 || res.status === 503;
+    console.info(
+      `[gemini] op=generate model=${model} status=${res.status} → ${transient && mi < models.length - 1 ? 'trying next model' : 'giving up'}`,
+    );
+    if (!transient) break; // a 4xx/5xx that won't be fixed by another model
   }
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new GeminiError('Gemini returned no text', 502);
-  return { text, meta: { aiMs, attempts, status: res.status } };
+  throw lastError ?? new GeminiError('Gemini failed', 502);
 }
 
 export async function generateJSON<T>(
