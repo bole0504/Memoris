@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../auth.js';
-import { generateJSON, GeminiError } from '../gemini.js';
+import { generateJSON } from '../llm.js';
+import { GeminiError } from '../gemini.js';
 import { CURATE_SCHEMA, curatePrompt, coerceConceptType } from '../prompts.js';
 import { consumeAiQuota } from '../quota.js';
 

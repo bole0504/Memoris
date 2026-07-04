@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { AnalyzeRequest, AnalyzeResponse } from '@memoris/shared';
 import { requireAuth } from '../auth.js';
-import { generateJSON, GeminiError } from '../gemini.js';
+import { generateJSON } from '../llm.js';
+import { GeminiError } from '../gemini.js';
 import { ANALYZE_SCHEMA, analyzePrompt, coerceConceptType } from '../prompts.js';
 import { consumeAiQuota } from '../quota.js';
 import { TtlCache } from '../cache.js';

@@ -137,9 +137,11 @@ node harness/ship-phase.mjs 5 "commit subject"  # verify, then commit + push onl
 
 ### Notes / deferred
 
-- **AI model:** Gemini `gemini-2.5-flash-lite` (cheapest with free-tier quota; `2.0-flash-lite`
-  has a 0 free-tier limit) and `gemini-embedding-001` for vectors. The key lives only on the
-  gateway. Configure via `apps/server/.env`.
+- **AI provider:** chat/translate routes through **OpenRouter** when `OPENROUTER_API_KEY` is set
+  (one API, many models, fallback via `LLM_MODELS`), otherwise falls back to **Gemini**
+  (`gemini-2.5-flash-lite`; `2.0-flash-lite` has a 0 free-tier limit). Embeddings always use Gemini
+  (`gemini-embedding-001`). Keys live only on the gateway — configure in `apps/server/.env`.
+  Switching providers is an env change, no redeploy of code.
 - **Auth:** MVP uses a dev email login (fully self-verifiable, no external setup). Google OAuth
   plugs into the same token issuance once a client id is configured.
 - **Billing:** Free↔Pro quota path is wired and enforced; Stripe Checkout is a `501` placeholder.

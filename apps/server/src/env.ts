@@ -14,6 +14,15 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
 
+  // LLM provider for chat/translate. If OPENROUTER_API_KEY is set, chat routes through OpenRouter
+  // (one API, many models, built-in fallback); otherwise it falls back to Gemini directly.
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  // OpenRouter model ids, tried in order for fallback. See https://openrouter.ai/models
+  llmModels: (process.env.LLM_MODELS ?? 'openai/gpt-4o-mini')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
   geminiEmbedModel: process.env.GEMINI_EMBED_MODEL ?? 'gemini-embedding-001',

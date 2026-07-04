@@ -44,8 +44,11 @@ node -e '
 
 echo "==> 3/5  Upload to $VPS_HOST:$REMOTE_DIR"
 ssh "$VPS_HOST" "mkdir -p '$REMOTE_DIR'"
-# --delete keeps the box in sync; never wipe the live SQLite db or node_modules.
-rsync -az --delete --exclude node_modules --exclude '*.db' "$STAGE/" "$VPS_HOST:$REMOTE_DIR/"
+# --delete keeps code in sync; never wipe the live SQLite db, node_modules, or the .env
+# (secrets like OPENROUTER_API_KEY are edited ON the box and must survive redeploys).
+rsync -az --delete --exclude node_modules --exclude '*.db' --exclude .env "$STAGE/" "$VPS_HOST:$REMOTE_DIR/"
+# Seed .env only if the box doesn't have one yet (first deploy); never overwrite it after.
+rsync -az --ignore-existing "$STAGE/.env" "$VPS_HOST:$REMOTE_DIR/.env"
 
 echo "==> 4/5  Ensure swap (512MB box OOMs without it) + install prod deps + Prisma"
 ssh "$VPS_HOST" bash -se <<REMOTE
