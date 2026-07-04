@@ -119,7 +119,8 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
 
             {view.result.timings && (
               <p className="text-[10px] text-slate-400">
-                ⚡ {view.result.timings.aiMs}ms AI · {view.result.timings.totalMs}ms total
+                {view.result.analysis.cached ? '⚡ cached (instant)' : `⚡ ${view.result.timings.aiMs}ms AI`} ·{' '}
+                {view.result.timings.totalMs}ms total
                 {view.result.timings.attempts > 1 ? ` · ${view.result.timings.attempts} tries` : ''}
               </p>
             )}

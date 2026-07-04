@@ -58,6 +58,8 @@ export interface AnalyzeResponse {
   proposedUnits: ProposedUnit[];
   /** Latency breakdown (optional; for debugging the popover). */
   timings?: Timings;
+  /** True when served from the server-side Tier-0 cache (no AI call). */
+  cached?: boolean;
 }
 
 /** Shape of an error body returned by the gateway. */
