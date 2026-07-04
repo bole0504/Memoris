@@ -1,5 +1,5 @@
 /** Typed wrappers over extension storage.local (tokens NEVER go in page localStorage). */
-import { browser } from 'wxt/browser';
+import { ext } from './ext.js';
 
 export interface Settings {
   /** Gateway base URL. */
@@ -31,22 +31,22 @@ interface AuthTokens {
 const KEYS = { settings: 'settings', auth: 'auth' } as const;
 
 export async function getSettings(): Promise<Settings> {
-  const r = await browser.storage.local.get(KEYS.settings);
+  const r = await ext.storage.local.get(KEYS.settings);
   return { ...DEFAULT_SETTINGS, ...(r[KEYS.settings] as Partial<Settings> | undefined) };
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch };
-  await browser.storage.local.set({ [KEYS.settings]: next });
+  await ext.storage.local.set({ [KEYS.settings]: next });
   return next;
 }
 
 export async function getAuth(): Promise<AuthTokens | undefined> {
-  const r = await browser.storage.local.get(KEYS.auth);
+  const r = await ext.storage.local.get(KEYS.auth);
   return r[KEYS.auth] as AuthTokens | undefined;
 }
 
 export async function setAuth(tokens: AuthTokens | undefined): Promise<void> {
-  if (tokens) await browser.storage.local.set({ [KEYS.auth]: tokens });
-  else await browser.storage.local.remove(KEYS.auth);
+  if (tokens) await ext.storage.local.set({ [KEYS.auth]: tokens });
+  else await ext.storage.local.remove(KEYS.auth);
 }

@@ -1,4 +1,4 @@
-import { browser } from 'wxt/browser';
+import { ext } from '../lib/ext.js';
 import { getBrain } from '../lib/brain.js';
 import { analyze, embed, pushStats, ApiError } from '../lib/api.js';
 import { getSettings } from '../lib/storage.js';
@@ -12,8 +12,8 @@ import { MSG, type AnyRequest, type CaptureResult, type Reply } from '../lib/mes
  * brain work happens here, behind a message API. This keeps ONE brain for the whole browser.
  */
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((msg: AnyRequest, _sender, sendResponse) => {
-    handle(msg)
+  ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    handle(msg as AnyRequest)
       .then(sendResponse)
       .catch((e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }));
     return true; // keep the channel open for the async response
@@ -123,7 +123,7 @@ const KEY = 'memoris:captures';
 const MAX = 20;
 
 async function readAll(): Promise<Record<string, StashEntry>> {
-  const r = await browser.storage.session.get(KEY);
+  const r = await ext.storage.session.get(KEY);
   return (r[KEY] as Record<string, StashEntry> | undefined) ?? {};
 }
 
@@ -133,7 +133,7 @@ async function stash(state: CaptureState): Promise<void> {
   // Prune oldest beyond MAX (object insertion order is preserved).
   const keys = Object.keys(all);
   for (const k of keys.slice(0, Math.max(0, keys.length - MAX))) delete all[k];
-  await browser.storage.session.set({ [KEY]: all });
+  await ext.storage.session.set({ [KEY]: all });
 }
 
 async function unstash(encounterId: string): Promise<StashEntry | undefined> {
@@ -143,5 +143,5 @@ async function unstash(encounterId: string): Promise<StashEntry | undefined> {
 async function restash(encounterId: string, entry: StashEntry): Promise<void> {
   const all = await readAll();
   all[encounterId] = entry;
-  await browser.storage.session.set({ [KEY]: all });
+  await ext.storage.session.set({ [KEY]: all });
 }

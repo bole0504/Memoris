@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { browser } from 'wxt/browser';
+import { ext } from '../../lib/ext.js';
 import type { Source } from '@memoris/shared';
 import { MSG, type CaptureResult, type Reply } from '../../lib/messages.js';
 
@@ -25,7 +25,7 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const reply = (await browser.runtime.sendMessage({
+      const reply = (await ext.runtime.sendMessage({
         type: MSG.capture,
         captureId,
         selection,
@@ -40,12 +40,12 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
     // On unmount (close / click-outside), abort the in-flight upstream request.
     return () => {
       cancelled = true;
-      void browser.runtime.sendMessage({ type: MSG.cancel, captureId });
+      void ext.runtime.sendMessage({ type: MSG.cancel, captureId });
     };
   }, [captureId, selection, context, source]);
 
   async function onRemember(unitText: string, encounterId: string) {
-    const reply = (await browser.runtime.sendMessage({
+    const reply = (await ext.runtime.sendMessage({
       type: MSG.remember,
       encounterId,
       unitText,
