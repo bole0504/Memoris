@@ -117,6 +117,20 @@ pnpm dev:server
 
 # Extension (loads at .output/chrome-mv3 → chrome://extensions → Load unpacked)
 pnpm dev:extension     # then click the toolbar icon → sign in (dev email) → select text anywhere
+```
+
+### Install on another machine (prebuilt)
+
+Every shipped change commits a fresh build to `release/extension/`. On any machine:
+
+```bash
+git clone https://github.com/bole0504/Memoris.git   # or: git pull
+# Chrome → chrome://extensions → enable Developer mode → Load unpacked → pick release/extension/
+# Open the popup → set Server URL (e.g. http://165.22.109.245:3000) → sign in → select text.
+```
+No build step needed. `git pull` + reload the extension in Chrome to update.
+
+```bash
 
 # Dashboard — http://localhost:5173 (proxies /v1 + /health to the server)
 pnpm dev:dashboard

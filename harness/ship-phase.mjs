@@ -18,7 +18,18 @@ if (!verify.ok) {
   process.exit(1);
 }
 
-console.log('\n✅ Verify passed — committing & pushing.');
+console.log('\n✅ Verify passed — building extension artifact for release/…');
+// Commit the built extension so another machine can pull the repo and Load unpacked from
+// release/extension without building (requested workflow).
+const build = sh('pnpm --filter @memoris/extension build');
+if (build.ok) {
+  sh('rm -rf release/extension && mkdir -p release/extension && cp -R apps/extension/.output/chrome-mv3/. release/extension/');
+} else {
+  console.error('extension build failed — skipping artifact refresh');
+  process.stdout.write(build.out);
+}
+
+console.log('Committing & pushing.');
 const status = sh('git status --porcelain');
 if (!status.out.trim()) {
   console.log('Nothing to commit. Done.');

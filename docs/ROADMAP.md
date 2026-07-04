@@ -1,8 +1,16 @@
 # Memoris — Roadmap (A → Z)
 
-> **Build status (2026-06-28):** Phases 0–5 implemented and harness-verified (Phase 4 = Obsidian
-> graph projection, with the lossless round-trip done as the highest-risk piece). Each phase shipped
-> only on `node harness/ship-phase.mjs <n>` PASS. Remaining: Phase 6 (private beta) and 7+ (future).
+> **Build status (2026-07-04):** Phases 0–5 implemented and harness-verified (Phase 4 = Obsidian
+> graph projection). Each phase shipped only on `node harness/ship-phase.mjs <n>` PASS.
+>
+> **Current priority (decided 2026-07-04): STABILIZE the app first.** Focus on making the daily
+> capture→remember→review experience solid, durable, and personal. The rest is deferred until the
+> app is stable:
+> - **Phase 5 (billing/Stripe real):** later — Free/Pro quota already enforced; real Stripe after stable.
+> - **Phase 6 (private beta):** later — polish + recruit users once the core feels solid.
+> - **Phase 7+ (desktop app, cloud sync, B2B):** later — but the **local-first durability / companion
+>   app with a real client DB** direction (see below) is now the leading candidate for the next big
+>   phase, because IndexedDB alone is too easily cleared.
 
 
 A phase-by-phase build plan from empty repo to a beta launch and beyond. Timeline assumes a
