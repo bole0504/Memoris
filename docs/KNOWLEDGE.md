@@ -30,8 +30,14 @@ Có **3 lớp** riêng biệt — đừng nhầm lẫn:
 - **Server Tier-0 cache:** TTL **6 giờ**/entry; LRU tối đa **1000 entry** (đầy → bỏ cũ nhất); và **mất
   hết khi restart server** (`pm2 restart`) vì là in-memory.
 - **Capture stash (session):** tối đa 20 entry; hết khi đóng trình duyệt.
-- **Client brain (IndexedDB):** KHÔNG phải cache — **lưu vĩnh viễn**. Chỉ mất khi user xóa dữ liệu
-  extension / gỡ extension (chưa có nút "xóa" trong UI).
+- **Client brain (IndexedDB):** KHÔNG phải cache — **lưu vĩnh viễn**. Đã tăng độ bền (Nấc 0):
+  `navigator.storage.persist()` + quyền `unlimitedStorage` (chống evict) + **auto-backup ra
+  `storage.local`** sau mỗi Remember + **auto-restore** khi brain trống. (Full "clear browsing data"
+  vẫn xóa cả hai — fix triệt để là Nấc 1: companion app + file DB.)
+
+> Ghi chú UX: popover **không còn hiện** `⚡ cached`/thời gian (tránh cảm giác "đã search"); các số
+> liệu thời gian giờ ghi ở `console.debug`. Lỗi AI hiện thông báo chung "Server is busy — please try
+> again", lỗi chính xác ghi ở `console.error`.
 
 ---
 
@@ -124,8 +130,8 @@ email + mật khẩu + verify) trước.
 Hiện extension chạy dạng **"Load unpacked"** (dev). Để phát hành:
 
 **Chuẩn bị (bắt buộc):**
-- **Trỏ về gateway production**: đổi mặc định `apiBaseUrl` (đang `http://localhost:3000`) sang URL
-  server thật, **HTTPS**. (Hiện user tự nhập trong popup — public thì nên set mặc định.)
+- **Gateway URL cấu hình trong CODE** (`apps/extension/lib/config.ts`), KHÔNG hiện cho user: dev build
+  → `localhost:3000`, production build → VPS. Public thì đổi sang domain **HTTPS** tại đây.
 - **Auth thật** (Google OAuth) thay dev-login.
 - **Icons** (16/32/48/128px), tên, version chuẩn trong manifest.
 - **Privacy Policy** (bắt buộc vì extension đọc text người dùng) + mô tả rõ quyền `<all_urls>`.
