@@ -166,6 +166,32 @@ export class MemoryStore {
     return this.adapter.listConcepts();
   }
 
+  /** Edit user-facing fields of a concept (gloss, personal notes, text, type). */
+  async updateConcept(
+    id: string,
+    patch: Partial<Pick<StoredConcept, 'text' | 'gloss' | 'notes' | 'type'>>,
+  ): Promise<StoredConcept> {
+    const c = await this.adapter.getConcept(id);
+    if (!c) throw new Error(`concept ${id} not found`);
+    if (patch.text !== undefined && patch.text.trim()) {
+      c.text = patch.text.trim();
+      c.key = normalizeKey(patch.text);
+    }
+    if (patch.gloss !== undefined) c.gloss = patch.gloss;
+    if (patch.notes !== undefined) c.notes = patch.notes;
+    if (patch.type !== undefined) c.type = patch.type;
+    await this.adapter.putConcept(c);
+    return c;
+  }
+
+  /** Delete a concept and any links referencing it. Encounters (the log) are left intact. */
+  async deleteConcept(id: string): Promise<void> {
+    for (const l of await this.adapter.listLinks()) {
+      if (l.fromConceptId === id || l.toConceptId === id) await this.adapter.deleteLink(l.id);
+    }
+    await this.adapter.deleteConcept(id);
+  }
+
   /** Encounters that gave rise to / re-saw a concept — the source context for review replay. */
   async conceptEncounters(conceptId: string): Promise<Encounter[]> {
     const concept = await this.adapter.getConcept(conceptId);

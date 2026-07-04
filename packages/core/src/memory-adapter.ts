@@ -56,4 +56,8 @@ export class InMemoryAdapter implements StorageAdapter {
   async listLinks(): Promise<Link[]> {
     return [...this.links.values()];
   }
+
+  async deleteLink(id: string): Promise<void> {
+    this.links.delete(id);
+  }
 }

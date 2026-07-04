@@ -83,6 +83,8 @@ export interface Concept {
   language: string;
   /** One-line gloss shown in the popover. */
   gloss?: string;
+  /** User's own notes about this concept (sacred — AI never overwrites). */
+  notes?: string;
   /** How many times the user has encountered this (denormalized for the hook). */
   encounterCount: number;
   firstSeen: IsoDateTime;

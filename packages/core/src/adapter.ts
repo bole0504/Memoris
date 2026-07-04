@@ -27,4 +27,5 @@ export interface StorageAdapter {
   // Typed links between concepts.
   putLink(link: Link): Promise<void>;
   listLinks(): Promise<Link[]>;
+  deleteLink(id: string): Promise<void>;
 }

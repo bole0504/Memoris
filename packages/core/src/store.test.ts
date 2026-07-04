@@ -194,6 +194,30 @@ describe('MemoryStore — capture loop', () => {
     expect(links[0]!.toConceptId).toBe(b.id);
   });
 
+  it('updateConcept edits gloss/notes and re-keys on text change', async () => {
+    const r = await store.lookup(capture('idempotent'));
+    const c = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });
+    const up = await store.updateConcept(c.id, { gloss: 'safe to repeat', notes: 'my note' });
+    expect(up.gloss).toBe('safe to repeat');
+    expect(up.notes).toBe('my note');
+    // Re-key on rename so Tier-0 finds the new text.
+    await store.updateConcept(c.id, { text: 'Idempotence' });
+    const hit = await store.lookup(capture('idempotence'));
+    expect(hit.tier).toBe(0);
+  });
+
+  it('deleteConcept removes the concept and its links', async () => {
+    const r1 = await store.lookup(capture('affect'));
+    const a = await store.remember({ encounterId: r1.encounter.id, text: 'affect' });
+    const r2 = await store.lookup(capture('effect'));
+    const b = await store.remember({ encounterId: r2.encounter.id, text: 'effect' });
+    await store.addLink(a.id, b.id, 'confused-with');
+    await store.deleteConcept(a.id);
+    expect(await store.getConcept(a.id)).toBeUndefined();
+    expect(await store.listLinks()).toHaveLength(0);
+    expect((await store.listConcepts()).map((c) => c.id)).toEqual([b.id]);
+  });
+
   it('review lifecycle: a saved concept becomes due, then reschedules on grade', async () => {
     const r = await store.lookup(capture('idempotent'));
     const c = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });

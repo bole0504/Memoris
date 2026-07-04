@@ -3,6 +3,7 @@ import { login, getMe, type MeResponse } from '../../lib/api.js';
 import { getAuth, setAuth, getSettings, setSettings, type Settings } from '../../lib/storage.js';
 import { getBrain } from '../../lib/brain.js';
 import { syncToObsidian } from '../../lib/obsidian.js';
+import { ext } from '../../lib/ext.js';
 import { Review } from './Review.js';
 
 const LANGS = [
@@ -149,6 +150,13 @@ export function App() {
             className="w-full rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
           >
             {dueCount > 0 ? `Review now (${dueCount} due)` : 'Review'}
+          </button>
+
+          <button
+            onClick={() => window.open(ext.runtime.getURL('manage.html'), '_blank')}
+            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            My Knowledge (browse &amp; edit)
           </button>
 
           <div>

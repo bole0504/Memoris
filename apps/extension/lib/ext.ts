@@ -19,6 +19,7 @@ type AnyApi = {
   };
   runtime: {
     id?: string;
+    getURL(path: string): string;
     sendMessage(message: unknown): Promise<unknown>;
     onMessage: {
       addListener(

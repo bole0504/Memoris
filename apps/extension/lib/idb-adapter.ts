@@ -65,4 +65,7 @@ export class IdbAdapter implements StorageAdapter {
   async listLinks(): Promise<Link[]> {
     return (await this.dbp).getAll('links');
   }
+  async deleteLink(id: string): Promise<void> {
+    await (await this.dbp).delete('links', id);
+  }
 }
