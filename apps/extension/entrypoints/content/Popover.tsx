@@ -53,26 +53,31 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
     if (reply.ok) setSaved((s) => new Set(s).add(unitText));
   }
 
+  // Place below the selection, or above it if there isn't room; cap height and let the body scroll.
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const above = spaceBelow < 280 && rect.top > spaceBelow;
+  const maxHeight = Math.max(160, (above ? rect.top : spaceBelow) - 16);
   const style: React.CSSProperties = {
     position: 'fixed',
-    top: Math.min(rect.bottom + 8, window.innerHeight - 40),
-    left: Math.min(rect.left, window.innerWidth - 360),
+    left: Math.min(rect.left, window.innerWidth - 356),
+    maxHeight,
     zIndex: 2147483647,
+    ...(above ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
   };
 
   return (
     <div
       style={style}
-      className="w-[340px] max-w-[92vw] rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl"
+      className="flex w-[340px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl"
     >
-      <header className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2">
         <span className="text-sm font-semibold text-indigo-600">Memoris</span>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="close">
           ✕
         </button>
       </header>
 
-      <div className="px-4 py-3 text-sm">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-sm">
         {view.kind === 'loading' && <p className="text-slate-500">Translating…</p>}
 
         {view.kind === 'need-auth' && (
