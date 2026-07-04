@@ -4,6 +4,7 @@ import { analyze, embed, pushStats, ApiError } from '../lib/api.js';
 import { getSettings } from '../lib/storage.js';
 import { runCapture, rememberUnit, type CaptureDeps, type CaptureState } from '../lib/capture-controller.js';
 import { syncToObsidian } from '../lib/obsidian.js';
+import { backupBrain, restoreIfEmpty } from '../lib/backup.js';
 import { MSG, type AnyRequest, type CaptureResult, type Reply } from '../lib/messages.js';
 
 /**
@@ -12,6 +13,11 @@ import { MSG, type AnyRequest, type CaptureResult, type Reply } from '../lib/mes
  * brain work happens here, behind a message API. This keeps ONE brain for the whole browser.
  */
 export default defineBackground(() => {
+  // Nấc 0 durability: ask the browser to keep our storage (resist eviction), and restore the brain
+  // from the local backup if IndexedDB came up empty.
+  void navigator.storage?.persist?.().catch(() => {});
+  void restoreIfEmpty(getBrain()).catch(() => {});
+
   ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     handle(msg as AnyRequest)
       .then(sendResponse)
@@ -108,6 +114,12 @@ async function remember(encounterId: string, unitText: string): Promise<Reply<{ 
     await syncToObsidian(brain);
   } catch {
     /* Obsidian not running — fine */
+  }
+  // Refresh the durability backup after each save (best-effort).
+  try {
+    await backupBrain(brain);
+  } catch {
+    /* storage full / unavailable — non-fatal */
   }
 
   return { ok: true, data: { conceptId: concept.id } };

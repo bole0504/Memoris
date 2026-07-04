@@ -1,5 +1,6 @@
 import type { AnalyzeResponse } from '@memoris/shared';
-import { getAuth, getSettings, setAuth } from './storage.js';
+import { getAuth, setAuth } from './storage.js';
+import { GATEWAY_URL } from './config.js';
 
 /** Gateway client. The extension ALWAYS talks to our gateway, never to an LLM directly. */
 
@@ -13,7 +14,7 @@ export class ApiError extends Error {
 }
 
 async function base(): Promise<string> {
-  return (await getSettings()).apiBaseUrl;
+  return GATEWAY_URL;
 }
 
 async function request<T>(

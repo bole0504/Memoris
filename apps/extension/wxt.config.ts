@@ -7,8 +7,8 @@ export default defineConfig({
   manifest: {
     name: 'Memoris',
     description: 'Your second brain for working in a second language.',
-    // Phase 0: only what we need to read a selection on any page.
-    permissions: ['storage', 'activeTab'],
+    // storage + unlimitedStorage so the IndexedDB brain resists eviction (Nấc 0 durability).
+    permissions: ['storage', 'activeTab', 'unlimitedStorage'],
     host_permissions: ['<all_urls>'],
   },
   vite: () => ({

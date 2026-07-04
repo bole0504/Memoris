@@ -33,9 +33,16 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
         source,
       })) as Reply<CaptureResult>;
       if (cancelled) return;
-      if (reply.ok) setView({ kind: 'ready', result: reply.data });
-      else if (reply.needAuth) setView({ kind: 'need-auth' });
-      else if (reply.error !== 'cancelled') setView({ kind: 'error', message: reply.error });
+      if (reply.ok) {
+        if (reply.data.timings) console.debug('[Memoris] timings', reply.data.timings);
+        setView({ kind: 'ready', result: reply.data });
+      } else if (reply.needAuth) {
+        setView({ kind: 'need-auth' });
+      } else if (reply.error !== 'cancelled') {
+        // Exact error → console for debugging; user sees a calm generic message.
+        console.error('[Memoris] capture failed:', reply.error);
+        setView({ kind: 'error', message: 'Server is busy — please try again.' });
+      }
     })();
     // On unmount (close / click-outside), abort the in-flight upstream request.
     return () => {
@@ -121,14 +128,6 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
                 </div>
               ))}
             </div>
-
-            {view.result.timings && (
-              <p className="text-[10px] text-slate-400">
-                {view.result.analysis.cached ? '⚡ cached (instant)' : `⚡ ${view.result.timings.aiMs}ms AI`} ·{' '}
-                {view.result.timings.totalMs}ms total
-                {view.result.timings.attempts > 1 ? ` · ${view.result.timings.attempts} tries` : ''}
-              </p>
-            )}
           </div>
         )}
       </div>

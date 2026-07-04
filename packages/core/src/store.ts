@@ -199,6 +199,13 @@ export class MemoryStore {
     return buildRelatedRefs(conceptId, links, new Map(concepts.map((c) => [c.id, c])));
   }
 
+  /** Bulk-load a brain snapshot (restore from backup / import). Overwrites by id. */
+  async import(data: BrainExport): Promise<void> {
+    for (const c of data.concepts) await this.adapter.putConcept(c);
+    for (const e of data.encounters) await this.adapter.putEncounter(e);
+    for (const l of data.links) await this.adapter.putLink(l);
+  }
+
   /** A portable snapshot of the whole brain — for Obsidian import / backup (Phase 4). */
   async export(): Promise<BrainExport> {
     const [concepts, encounters, links] = await Promise.all([

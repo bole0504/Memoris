@@ -2,8 +2,6 @@
 import { ext } from './ext.js';
 
 export interface Settings {
-  /** Gateway base URL. */
-  apiBaseUrl: string;
   /** User's native language (BCP-47), what we translate into. */
   targetLanguage: string;
   /** Per-domain "don't send to cloud" set (Phase 2 privacy). */
@@ -15,7 +13,6 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  apiBaseUrl: 'http://localhost:3000',
   targetLanguage: 'vi',
   privateDomains: [],
   obsidianSync: true,

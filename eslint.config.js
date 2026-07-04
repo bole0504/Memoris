@@ -14,6 +14,7 @@ export default tseslint.config(
       '**/.wxt/**',
       '**/prisma/generated/**',
       'apps/obsidian-plugin/main.js',
+      'release/**',
     ],
   },
   js.configs.recommended,
