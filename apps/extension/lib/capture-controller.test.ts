@@ -11,8 +11,7 @@ function makeDeps(brain: MemoryStore): CaptureDeps {
       proposedUnits: [{ text, type: 'term', gloss: 'unit gloss' }],
     }),
   );
-  const embed = vi.fn(async (_text: string) => [1, 0, 0]);
-  return { analyze, embed, brain, targetLanguage: 'vi' };
+  return { analyze, brain, targetLanguage: 'vi' };
 }
 
 function capture(selection: string): CaptureInput {
@@ -29,7 +28,7 @@ describe('capture controller (Phase 1 loop)', () => {
     deps = makeDeps(brain);
   });
 
-  it('select → analyze + embed → encounter logged → new verdict', async () => {
+  it('select → analyze → encounter logged → new verdict', async () => {
     const state = await runCapture(capture('idempotent'), deps);
     expect(state.analysis.translation).toBe('VI(idempotent)');
     expect(state.tier).toBe('miss');
@@ -55,14 +54,5 @@ describe('capture controller (Phase 1 loop)', () => {
     expect(s2.tier).toBe(0);
     expect(s2.verdict.status).toBe('seen');
     expect(s2.verdict.seenCount).toBe(2);
-  });
-
-  it('embedding failure is non-fatal (offline degrades gracefully)', async () => {
-    deps.embed = vi.fn(async () => {
-      throw new Error('offline');
-    });
-    const state = await runCapture(capture('webhook'), deps);
-    expect(state.embedding).toBeUndefined();
-    expect(state.analysis.translation).toBe('VI(webhook)');
   });
 });

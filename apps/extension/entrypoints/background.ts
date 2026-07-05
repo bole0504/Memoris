@@ -16,7 +16,10 @@ export default defineBackground(() => {
   // Nấc 0 durability: ask the browser to keep our storage (resist eviction), and restore the brain
   // from the local backup if IndexedDB came up empty.
   void navigator.storage?.persist?.().catch(() => {});
-  void restoreIfEmpty(getBrain()).catch(() => {});
+  void restoreIfEmpty(getBrain())
+    .catch(() => {})
+    .then(() => backfillEmbeddings())
+    .catch(() => {});
 
   ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     handle(msg as AnyRequest)
@@ -28,7 +31,20 @@ export default defineBackground(() => {
 
 async function deps(): Promise<CaptureDeps> {
   const settings = await getSettings();
-  return { analyze, embed, brain: getBrain(), targetLanguage: settings.targetLanguage };
+  return { analyze, brain: getBrain(), targetLanguage: settings.targetLanguage };
+}
+
+/** Backfill embeddings for concepts saved before embed-at-remember (best-effort, capped). */
+async function backfillEmbeddings(max = 25): Promise<void> {
+  const brain = getBrain();
+  const missing = (await brain.conceptsMissingEmbedding()).slice(0, max);
+  for (const c of missing) {
+    try {
+      await brain.setEmbedding(c.id, await embed(c.text));
+    } catch {
+      break; // offline / not signed in / quota — try again next startup
+    }
+  }
 }
 
 // In-flight captures, so a "click outside" can abort the upstream request.
@@ -93,6 +109,15 @@ async function remember(encounterId: string, unitText: string): Promise<Reply<{ 
 
   const brain = getBrain();
   const concept = await rememberUnit(entry.state, unit, await deps());
+
+  // Embed the saved concept once → powers related-words + graph in the Knowledge page.
+  if (!concept.embedding) {
+    try {
+      await brain.setEmbedding(concept.id, await embed(concept.text));
+    } catch {
+      /* offline / quota — backfilled later */
+    }
+  }
 
   entry.savedConceptIds = [...new Set([...entry.savedConceptIds, concept.id])];
   await restash(encounterId, entry);

@@ -219,6 +219,56 @@ export class MemoryStore {
     return this.adapter.listLinks();
   }
 
+  /** Set/replace a concept's embedding (used by embed-at-remember + backfill). */
+  async setEmbedding(id: string, embedding: number[]): Promise<void> {
+    const c = await this.adapter.getConcept(id);
+    if (!c) return;
+    c.embedding = embedding;
+    await this.adapter.putConcept(c);
+  }
+
+  /** Concepts that still lack an embedding (for lazy backfill). */
+  async conceptsMissingEmbedding(): Promise<StoredConcept[]> {
+    return (await this.adapter.listConcepts()).filter((c) => !c.embedding?.length);
+  }
+
+  /** Semantically nearest concepts (cosine over stored embeddings) — powers "related words". */
+  async relatedConcepts(
+    conceptId: string,
+    opts: { k?: number; minSim?: number } = {},
+  ): Promise<{ concept: StoredConcept; similarity: number }[]> {
+    const { k = 8, minSim = 0.5 } = opts;
+    const target = await this.adapter.getConcept(conceptId);
+    if (!target?.embedding?.length) return [];
+    const others = (await this.adapter.listConcepts()).filter(
+      (c) => c.id !== conceptId && c.embedding?.length,
+    );
+    return others
+      .map((c) => ({ concept: c, similarity: cosineSimilarity(target.embedding!, c.embedding!) }))
+      .filter((x) => x.similarity >= minSim)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, k);
+  }
+
+  /** Map conceptId → distinct source domains it was met on (the "where" dimension). */
+  async domainsByConcept(): Promise<Record<string, string[]>> {
+    const [concepts, encounters] = await Promise.all([
+      this.adapter.listConcepts(),
+      this.adapter.listEncounters(),
+    ]);
+    const encById = new Map(encounters.map((e) => [e.id, e]));
+    const out: Record<string, string[]> = {};
+    for (const c of concepts) {
+      const set = new Set<string>();
+      for (const eid of c.encounterIds) {
+        const e = encById.get(eid);
+        if (e) set.add(e.source.domain);
+      }
+      out[c.id] = [...set];
+    }
+    return out;
+  }
+
   /** Wikilink targets for a concept (Obsidian projection, Phase 4). */
   async relatedRefs(conceptId: string): Promise<RelatedRef[]> {
     const [links, concepts] = await Promise.all([this.adapter.listLinks(), this.adapter.listConcepts()]);

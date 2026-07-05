@@ -218,6 +218,31 @@ describe('MemoryStore — capture loop', () => {
     expect((await store.listConcepts()).map((c) => c.id)).toEqual([b.id]);
   });
 
+  it('relatedConcepts ranks by embedding similarity', async () => {
+    const mk = async (text: string, emb: number[]) => {
+      const r = await store.lookup(capture(text));
+      const c = await store.remember({ encounterId: r.encounter.id, text });
+      await store.setEmbedding(c.id, emb);
+      return c;
+    };
+    const a = await mk('idempotent', [1, 0, 0]);
+    const b = await mk('idempotency', [0.98, 0.1, 0]); // close to a
+    await mk('banana', [0, 0, 1]); // far
+    const related = await store.relatedConcepts(a.id, { minSim: 0.5 });
+    expect(related[0]!.concept.id).toBe(b.id);
+    expect(related.every((r) => r.concept.id !== a.id)).toBe(true);
+  });
+
+  it('domainsByConcept maps a concept to where it was met', async () => {
+    const r1 = await store.lookup({
+      selection: 'idempotent',
+      source: { id: 's', app: 'github.com', domain: 'github.com', url: 'https://github.com/x' },
+    });
+    const c = await store.remember({ encounterId: r1.encounter.id, text: 'idempotent' });
+    const map = await store.domainsByConcept();
+    expect(map[c.id]).toEqual(['github.com']);
+  });
+
   it('review lifecycle: a saved concept becomes due, then reschedules on grade', async () => {
     const r = await store.lookup(capture('idempotent'));
     const c = await store.remember({ encounterId: r.encounter.id, text: 'idempotent' });
