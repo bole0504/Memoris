@@ -4,4 +4,4 @@
  */
 export const GATEWAY_URL = import.meta.env.DEV
   ? 'http://localhost:3000'
-  : 'http://165.22.109.245:3000';
+  : 'https://api.flashcard.io.vn';
