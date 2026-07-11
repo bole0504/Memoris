@@ -4,10 +4,10 @@ Status toward a public Chrome Web Store release. 🔴 = blocks launch, 🟠 = sh
 
 | # | Item | Status |
 |---|---|---|
-| 1 | 🔴 **HTTPS/TLS** in front of the gateway (no plaintext) | ☐ (see below) |
-| 2 | 🔴 **Privacy Policy** published + linked in the store listing | ☐ ([docs/PRIVACY.md](PRIVACY.md) draft) |
-| 3 | 🔴 **AI provider no-logging / no-training** configured + disclosed | ☐ |
-| 4 | 🔴 Gateway server bound to **127.0.0.1** (only nginx public); close port 3000 | ☐ |
+| 1 | 🔴 **HTTPS/TLS** in front of the gateway (no plaintext) | ✅ nginx + Let's Encrypt at `https://api.flashcard.io.vn` (auto-renew) |
+| 2 | 🔴 **Privacy Policy** published + linked in the store listing | ☐ ([docs/PRIVACY.md](PRIVACY.md) draft — fill contact + publish) |
+| 3 | 🔴 **AI provider no-logging / no-training** configured + disclosed | ☐ (OpenRouter settings) |
+| 4 | 🔴 Gateway bound to **127.0.0.1** (only nginx public); port 3000 closed | ✅ done |
 | 5 | 🟠 **First-run consent** screen ("selecting text sends it to AI to translate") | ☐ |
 | 6 | 🟠 **Secret-skip heuristic** (don't send things that look like passwords/tokens/keys) | ☐ |
 | 7 | 🟠 Strong `JWT_SECRET` + real auth (Google OAuth) instead of dev email login | ☐ |
