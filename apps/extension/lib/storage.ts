@@ -47,3 +47,13 @@ export async function setAuth(tokens: AuthTokens | undefined): Promise<void> {
   if (tokens) await ext.storage.local.set({ [KEYS.auth]: tokens });
   else await ext.storage.local.remove(KEYS.auth);
 }
+
+/** First-run privacy consent. Returns the ISO time the user agreed, or undefined. */
+export async function getConsentAt(): Promise<string | undefined> {
+  const r = await ext.storage.local.get('consent');
+  return (r['consent'] as { agreedAt?: string } | undefined)?.agreedAt;
+}
+
+export async function setConsent(): Promise<void> {
+  await ext.storage.local.set({ consent: { agreedAt: new Date().toISOString() } });
+}

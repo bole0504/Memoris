@@ -5,3 +5,6 @@
 export const GATEWAY_URL = import.meta.env.DEV
   ? 'http://localhost:3000'
   : 'https://api.flashcard.io.vn';
+
+/** Public privacy policy URL (shown in the consent screen + store listing). */
+export const PRIVACY_URL = 'https://api.flashcard.io.vn/privacy';

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ext } from '../../lib/ext.js';
 import type { Source } from '@memoris/shared';
 import { MSG, type CaptureResult, type Reply } from '../../lib/messages.js';
+import { getConsentAt } from '../../lib/storage.js';
+import { looksLikeSecret } from '../../lib/secret.js';
 
 export interface PopoverProps {
   captureId: string;
@@ -15,16 +17,29 @@ export interface PopoverProps {
 type View =
   | { kind: 'loading' }
   | { kind: 'need-auth' }
+  | { kind: 'need-consent' }
+  | { kind: 'blocked' }
   | { kind: 'error'; message: string }
   | { kind: 'ready'; result: CaptureResult };
 
 export function Popover({ captureId, selection, context, source, rect, onClose }: PopoverProps) {
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [override, setOverride] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Privacy gates before anything leaves the page.
+      if (!(await getConsentAt())) {
+        if (!cancelled) setView({ kind: 'need-consent' });
+        return;
+      }
+      if (!override && looksLikeSecret(selection)) {
+        if (!cancelled) setView({ kind: 'blocked' });
+        return;
+      }
+      if (!cancelled) setView({ kind: 'loading' });
       const reply = (await ext.runtime.sendMessage({
         type: MSG.capture,
         captureId,
@@ -49,7 +64,7 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
       cancelled = true;
       void ext.runtime.sendMessage({ type: MSG.cancel, captureId });
     };
-  }, [captureId, selection, context, source]);
+  }, [captureId, selection, context, source, override]);
 
   async function onRemember(unitText: string, encounterId: string) {
     const reply = (await ext.runtime.sendMessage({
@@ -91,6 +106,27 @@ export function Popover({ captureId, selection, context, source, rect, onClose }
           <p className="text-slate-600">
             Sign in from the Memoris toolbar icon to start translating &amp; remembering.
           </p>
+        )}
+
+        {view.kind === 'need-consent' && (
+          <p className="text-slate-600">
+            Open the Memoris toolbar icon and agree to the privacy notice to start translating.
+          </p>
+        )}
+
+        {view.kind === 'blocked' && (
+          <div className="space-y-2">
+            <p className="text-amber-700">
+              This looks like sensitive data (a key, token, password, or card number). Memoris did
+              <b> not</b> send it.
+            </p>
+            <button
+              onClick={() => setOverride(true)}
+              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Translate anyway
+            </button>
+          </div>
         )}
 
         {view.kind === 'error' && <p className="text-rose-600">{view.message}</p>}
