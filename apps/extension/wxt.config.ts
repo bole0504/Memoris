@@ -8,7 +8,7 @@ export default defineConfig({
     name: 'Memoris',
     description: 'Your second brain for working in a second language.',
     // storage + unlimitedStorage so the IndexedDB brain resists eviction (Nấc 0 durability).
-    permissions: ['storage', 'activeTab', 'unlimitedStorage'],
+    permissions: ['storage', 'activeTab', 'unlimitedStorage', 'identity'],
     host_permissions: ['<all_urls>'],
     icons: {
       16: 'icon/16.png',

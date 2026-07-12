@@ -10,6 +10,7 @@ import {
   type Settings,
 } from '../../lib/storage.js';
 import { PRIVACY_URL } from '../../lib/config.js';
+import { signInWithGoogle, googleConfigured } from '../../lib/auth-google.js';
 import { getBrain } from '../../lib/brain.js';
 import { syncToObsidian } from '../../lib/obsidian.js';
 import { ext } from '../../lib/ext.js';
@@ -62,6 +63,19 @@ export function App() {
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'sign-in failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onGoogle() {
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Google sign-in failed');
     } finally {
       setBusy(false);
     }
@@ -160,6 +174,18 @@ export function App() {
         </div>
       ) : !me ? (
         <div className="mt-4 space-y-2">
+          {googleConfigured() && (
+            <>
+              <button
+                disabled={busy}
+                onClick={onGoogle}
+                className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Sign in with Google
+              </button>
+              <p className="text-center text-[10px] text-slate-400">or use a dev email</p>
+            </>
+          )}
           <label className="block text-xs font-medium text-slate-600">Sign in (dev)</label>
           <input
             type="email"

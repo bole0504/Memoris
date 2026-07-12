@@ -88,3 +88,25 @@ In `apps/extension/lib/config.ts`, set the production URL to `https://api.memori
   AI provider to translate, with a link to the Privacy Policy.
 - **Secret-skip heuristic:** before sending, skip/warn when the selection matches patterns like
   API keys (`sk-…`, `AKIA…`), JWTs, long hex/base64 blobs, `password=`, credit-card-like numbers.
+
+---
+
+## 7. Google OAuth (code is built; needs a Google client)
+
+The extension flow (`chrome.identity` → Google ID token → `POST /v1/auth/google` → our JWT) and the
+server verification are implemented. To turn it on:
+
+1. **Google Cloud Console** → new project → **OAuth consent screen**: External, add scopes
+   `openid`, `email`, `profile`; add yourself as a test user (or publish the consent screen).
+2. **Credentials → Create OAuth client ID → Web application.**
+3. **Authorized redirect URIs:** add the extension's redirect URL — find it by running
+   `chrome.identity.getRedirectURL()` in the extension (looks like
+   `https://<extension-id>.chromiumapp.org/`). Add both the dev and published ids.
+4. Copy the **Client ID** into:
+   - `apps/extension/lib/config.ts` → `GOOGLE_CLIENT_ID` (public; rebuild + reload)
+   - VPS `/opt/memoris/server/.env` → `GOOGLE_CLIENT_ID=...` then `pm2 restart memoris-server`
+5. **Note:** setting `GOOGLE_CLIENT_ID` on the server **disables the dev email login** (Google only).
+6. *(Optional)* Pin a stable extension id in dev via manifest `key` so the redirect URI is stable.
+
+Until then, `GOOGLE_CLIENT_ID` stays empty → the "Sign in with Google" button is hidden and the dev
+email login works as before.

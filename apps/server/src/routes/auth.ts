@@ -1,7 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { signAccessToken, signRefreshToken, verifyToken } from '../auth.js';
 import { upsertUser, prisma } from '../db.js';
 import { env } from '../env.js';
+
+// Google's public keys for verifying ID tokens (cached by jose).
+const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
 /**
  * Auth routes. MVP uses a dev email login (fully self-verifiable, no external setup). Google OAuth
@@ -28,6 +32,33 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       accessToken: await signAccessToken(authUser),
       refreshToken: await signRefreshToken(authUser),
     };
+  });
+
+  // POST /v1/auth/google { idToken } → verify Google ID token → our tokens.
+  app.post<{ Body: { idToken?: string } }>('/v1/auth/google', async (req, reply) => {
+    if (!env.googleClientId) {
+      return reply.code(501).send({ error: { code: 'not_configured', message: 'Google sign-in not configured' } });
+    }
+    const idToken = req.body?.idToken;
+    if (!idToken) return reply.code(400).send({ error: { code: 'bad_request', message: 'idToken required' } });
+    try {
+      const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
+        audience: env.googleClientId,
+      });
+      const email = String(payload.email ?? '').trim().toLowerCase();
+      if (!email || payload.email_verified === false) throw new Error('email not verified');
+      const user = await upsertUser(email, typeof payload.name === 'string' ? payload.name : undefined);
+      const authUser = { id: user.id, email: user.email };
+      return {
+        user: { id: user.id, email: user.email, name: user.name, plan: user.plan },
+        accessToken: await signAccessToken(authUser),
+        refreshToken: await signRefreshToken(authUser),
+      };
+    } catch (err) {
+      req.log.warn({ err }, 'google auth failed');
+      return reply.code(401).send({ error: { code: 'unauthenticated', message: 'invalid Google token' } });
+    }
   });
 
   // POST /v1/auth/refresh { refreshToken } → new access token.

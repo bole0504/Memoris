@@ -27,6 +27,10 @@ type AnyApi = {
       ): void;
     };
   };
+  identity?: {
+    getRedirectURL(path?: string): string;
+    launchWebAuthFlow(details: { url: string; interactive: boolean }): Promise<string | undefined>;
+  };
 };
 
 const g = globalThis as unknown as { browser?: AnyApi; chrome?: AnyApi };

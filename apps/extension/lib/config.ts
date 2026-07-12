@@ -8,3 +8,9 @@ export const GATEWAY_URL = import.meta.env.DEV
 
 /** Public privacy policy URL (shown in the consent screen + store listing). */
 export const PRIVACY_URL = 'https://api.flashcard.io.vn/privacy';
+
+/**
+ * Google OAuth Web client id (public — safe in the client). Empty = Google sign-in hidden, dev
+ * email login used. Fill after creating the OAuth client (see docs/SECURITY.md → Google OAuth).
+ */
+export const GOOGLE_CLIENT_ID = '';
