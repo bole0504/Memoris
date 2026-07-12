@@ -54,6 +54,16 @@ const live = {
         );
       },
     },
+    {
+      name: 'P0: /privacy serves the public policy page',
+      fn: async ({ base }) => {
+        const r = await fetch(`${base}/privacy`);
+        assert(r.ok, `status ${r.status}`);
+        const t = await r.text();
+        assert(/Privacy Policy/.test(t), 'privacy page missing expected content');
+        return 'html served';
+      },
+    },
   ],
   1: [
     {

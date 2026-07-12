@@ -10,6 +10,7 @@ import { embedRoutes } from './routes/embed.js';
 import { curateRoutes } from './routes/curate.js';
 import { meRoutes } from './routes/me.js';
 import { billingRoutes } from './routes/billing.js';
+import { privacyRoutes } from './routes/privacy.js';
 
 export const SERVER_VERSION = '0.1.0';
 
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(curateRoutes);
   await app.register(meRoutes);
   await app.register(billingRoutes);
+  await app.register(privacyRoutes);
 
   app.addHook('onClose', async () => {
     await prisma.$disconnect();
