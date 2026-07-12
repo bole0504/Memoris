@@ -66,14 +66,15 @@ npm install --omit=dev --no-audit --no-fund
 ./node_modules/.bin/prisma db push
 REMOTE
 
-echo "==> 5/5  (Re)start under pm2 on port $PORT (alongside capnhatgia)"
+echo "==> 5/5  (Re)start under pm2 on 127.0.0.1:$PORT (behind nginx; NOT public)"
 ssh "$VPS_HOST" bash -se <<REMOTE
 set -euo pipefail
 cd "$REMOTE_DIR"
 pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
-PORT="$PORT" HOST="0.0.0.0" pm2 start "node --env-file=.env dist/index.js" --name "$APP_NAME"
+# Bind to localhost only — nginx (same box) terminates HTTPS and proxies here. Port 3000 stays
+# closed to the internet.
+PORT="$PORT" HOST="127.0.0.1" pm2 start "node --env-file=.env dist/index.js" --name "$APP_NAME"
 pm2 save
 REMOTE
 
-echo "==> Done. Test from the VPS:  curl http://127.0.0.1:$PORT/health"
-echo "    From outside (open the port/firewall first):  curl http://<vps-ip>:$PORT/health"
+echo "==> Done. Public URL is served by nginx over HTTPS, e.g. https://api.flashcard.io.vn/health"
