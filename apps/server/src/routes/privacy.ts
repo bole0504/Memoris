@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 const UPDATED = '2026-07-11';
-const CONTACT = 'privacy@flashcard.io.vn';
+const CONTACT = 'duclt47@gmail.com';
 
 /**
  * Public privacy policy page (no auth) — the URL required by the Chrome Web Store listing.

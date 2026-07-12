@@ -66,4 +66,4 @@ We will update this page and the "Last updated" date when this policy changes.
 
 ## Contact
 
-Questions or data requests: **[your-contact-email]**.
+Questions or data requests: **duclt47@gmail.com**.
