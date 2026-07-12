@@ -1,5 +1,6 @@
 /** Typed wrappers over extension storage.local (tokens NEVER go in page localStorage). */
 import { ext } from './ext.js';
+import { uuid } from './uuid.js';
 
 export interface Settings {
   /** User's native language (BCP-47), what we translate into. */
@@ -56,4 +57,15 @@ export async function getConsentAt(): Promise<string | undefined> {
 
 export async function setConsent(): Promise<void> {
   await ext.storage.local.set({ consent: { agreedAt: new Date().toISOString() } });
+}
+
+/** A stable anonymous email per install, so the app can auto-sign-in silently (no login UI). */
+export async function getOrCreateAnonEmail(): Promise<string> {
+  const r = await ext.storage.local.get('anonEmail');
+  let email = r['anonEmail'] as string | undefined;
+  if (!email) {
+    email = `anon-${uuid()}@memoris.app`;
+    await ext.storage.local.set({ anonEmail: email });
+  }
+  return email;
 }

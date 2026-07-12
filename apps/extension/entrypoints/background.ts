@@ -1,9 +1,8 @@
 import { ext } from '../lib/ext.js';
 import { getBrain } from '../lib/brain.js';
-import { analyze, embed, pushStats, ApiError } from '../lib/api.js';
-import { getSettings } from '../lib/storage.js';
+import { analyze, embed, pushStats, login, ApiError } from '../lib/api.js';
+import { getSettings, getAuth, getOrCreateAnonEmail } from '../lib/storage.js';
 import { runCapture, rememberUnit, type CaptureDeps, type CaptureState } from '../lib/capture-controller.js';
-import { syncToObsidian } from '../lib/obsidian.js';
 import { backupBrain, restoreIfEmpty } from '../lib/backup.js';
 import { MSG, type AnyRequest, type CaptureResult, type Reply } from '../lib/messages.js';
 
@@ -16,6 +15,7 @@ export default defineBackground(() => {
   // Nấc 0 durability: ask the browser to keep our storage (resist eviction), and restore the brain
   // from the local backup if IndexedDB came up empty.
   void navigator.storage?.persist?.().catch(() => {});
+  void ensureSignedIn().catch(() => {});
   void restoreIfEmpty(getBrain())
     .catch(() => {})
     .then(() => backfillEmbeddings())
@@ -32,6 +32,16 @@ export default defineBackground(() => {
 async function deps(): Promise<CaptureDeps> {
   const settings = await getSettings();
   return { analyze, brain: getBrain(), targetLanguage: settings.targetLanguage };
+}
+
+/** Silent anonymous sign-in so the app "just works" with no login UI. */
+async function ensureSignedIn(): Promise<void> {
+  if (await getAuth()) return;
+  try {
+    await login(await getOrCreateAnonEmail());
+  } catch {
+    /* offline / gateway down — capture will retry */
+  }
 }
 
 /** Backfill embeddings for concepts saved before embed-at-remember (best-effort, capped). */
@@ -60,8 +70,6 @@ async function handle(msg: AnyRequest): Promise<Reply<unknown>> {
       return { ok: true, data: null };
     case MSG.remember:
       return remember(msg.encounterId, msg.unitText);
-    case MSG.syncObsidian:
-      return { ok: true, data: { ok: await syncToObsidian(getBrain()) } };
     default:
       return { ok: false, error: 'unknown message' };
   }
@@ -76,6 +84,7 @@ async function capture(
   const controller = new AbortController();
   inFlight.set(captureId, controller);
   try {
+    await ensureSignedIn();
     const state = await runCapture(
       { selection, surroundingContext: context, source },
       await deps(),
@@ -134,11 +143,6 @@ async function remember(encounterId: string, unitText: string): Promise<Reply<{ 
     });
   } catch {
     /* offline / not signed in */
-  }
-  try {
-    await syncToObsidian(brain);
-  } catch {
-    /* Obsidian not running — fine */
   }
   // Refresh the durability backup after each save (best-effort).
   try {
